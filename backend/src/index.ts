@@ -141,23 +141,26 @@ app.get(
 app.get(
   "/api/Material",
   async ({ query, set }) => {
-    const { serie, code } = query; // รับแค่ serie กับ code ก็พอ (pattern ไม่ต้องใช้แล้ว)
+    // 1. รับค่า Main ตัวเดียวตามที่ Frontend ส่งมา
+    const { Main } = query;
 
-    if (!serie || !code) {
+    if (!Main) {
       set.status = 400;
-      return "Missing serie or code";
+      return "Missing Main parameter";
     }
 
     try {
+      // 2. สร้าง Path วิ่งไปที่ Z:\Easy Product Guide\Materials\[ค่าที่ส่งมา]
       const targetFolder = join(
-        "Z:\\Easy Product Guide\\All Product",
-        serie,
-        code
+        "Z:\\Easy Product Guide\\Materials",
+        Main
       );
+
+      console.log("Searching PDF in:", targetFolder);
 
       const files = await readdir(targetFolder);
 
-      // ค้นหาไฟล์แรกที่เป็น .pdf โดยไม่สนชื่อไฟล์
+      // 3. หาไฟล์ .pdf ใบแรกที่เจอในโฟลเดอร์นั้น
       const pdfFile = files.find((file) => 
         file.toLowerCase().endsWith(".pdf")
       );
@@ -176,9 +179,9 @@ app.get(
     }
   },
   {
+    // 4. แก้ Validation ให้ตรวจเช็คค่า Main
     query: t.Object({
-      serie: t.String(),
-      code: t.String(),
+      Main: t.String(),
     }),
   }
 );

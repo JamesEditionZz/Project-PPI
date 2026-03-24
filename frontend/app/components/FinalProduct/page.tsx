@@ -15,6 +15,7 @@ export default function page({ ValueToggle }: MainProps) {
     React.useState<string>("");
   const [product_Header_Toggle, setProduct_Header_Toggle] =
     React.useState<string>("");
+    const [getHeader, setGetHeader] = React.useState<string>("");
   const [modelCatalog, setModelCatalog] = React.useState<boolean>();
   const [modelColor, setModelColor] = React.useState<boolean>();
 
@@ -67,18 +68,15 @@ export default function page({ ValueToggle }: MainProps) {
     }
   }, [Product_Model]);
 
-  const PDFCatalog = (value: any) => {
+  const PDFCatalog = (value: any) => {    
     setModelCatalog(true);
     setProduct_Code_Toggle(value);
   };
 
   const PDFColor = (value: any) => {
     setModelColor(true);
-    setProduct_Header_Toggle(value);
+    setGetHeader(value.substring(value.indexOf(' ') + 1));
   };
-
-  console.log(product_Header_Toggle);
-  
 
   return (
     <div className="mt-5">
@@ -181,7 +179,7 @@ export default function page({ ValueToggle }: MainProps) {
                         <div className="flex justify-center p-2">
                           <div
                             className="flex justify-center cursor-pointer"
-                            onClick={() => PDFColor(item)}
+                            onClick={() => PDFColor(product_Header_Toggle)}
                           >
                             <Image
                               src={"/Icon/pdf.png"}
@@ -203,9 +201,7 @@ export default function page({ ValueToggle }: MainProps) {
                           >
                             <iframe
                               className="iframepdf"
-                              src={`http://192.168.10.23:5005/api/Color?path=${encodeURIComponent(
-                                `Materials//`,
-                              )}`}
+                              src={`http://localhost:5005/api/Material?Main=${encodeURIComponent(getHeader)}`}
                               title="pdf"
                             ></iframe>
                           </div>
