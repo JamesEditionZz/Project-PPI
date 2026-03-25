@@ -1,5 +1,7 @@
+"use client";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
+import Reference from "../Reference/page";
 
 interface MainProps {
   ValueToggle: any[];
@@ -45,14 +47,9 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
   return (
     <div className="grid grid-cols-5 gap-5 text-lg font-bold p-8 max-[500px]:grid-cols-1 max-[500px]:gap-2 max-[800px]:grid-cols-2 max-[800px]:gap-2 max-[1200px]:grid-cols-3 max-[1200px]:gap-2 max-[1600px]:grid-cols-4 max-[1600px]:gap-2">
       {[...uniqueProductTypes].sort().map((item, index) => {
-        const matched = view_MD.find(
-          (p: { Product_Serie: string }) =>
-            p.Product_Serie === item.split("|")[0],
-        );
-
         return (
           <div key={index}>
-            {item ? (
+            {/* {item.split("|")[0] !== "null" ? ( */}
               <div
                 className="cursor-pointer box-size-Images"
                 onClick={() => SelectProduct(item)}
@@ -60,9 +57,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                 <div>
                   <Image
                     loader={myLoader}
-                    src={`${`http://192.168.10.23:5005/api/get_image_by_pattern?path=${encodeURIComponent(
-                      matched?.Product_Path_img || "",
-                    )}&pattern=${encodeURIComponent(item.split("|")[0])}`}`}
+                    src={`${`http://localhost:5005/api/Cover/Photo?Main=${encodeURIComponent(item.split("|")[0])}`}`}
                     width={1000}
                     height={1000}
                     alt={`${item}`}
@@ -75,9 +70,21 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                   {item.split("|")[1]}
                 </div>
               </div>
-            ) : (
-              <></>
-            )}
+            {/* ) : ( */}
+              <>
+                {/* {view_MD.map((item, index) => (
+                  <div key={index}>
+                    <Image
+                      loader={myLoader}
+                      src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                      width={1000}
+                      height={1000}
+                      alt={`${item.Product_Serie}`}
+                    />
+                  </div>
+                ))} */}
+              </>
+            {/* )} */}
           </div>
         );
       })}

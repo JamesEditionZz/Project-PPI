@@ -405,3 +405,8 @@ tr td {
     border-radius: 10px;
     cursor: pointer;
 }
+
+.overflow-DataAdmin{
+  overflow: auto !important;
+  height: 200px !important;
+}
