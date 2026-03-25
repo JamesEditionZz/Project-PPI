@@ -73,7 +73,7 @@ app.get(
 
     try {
       // Path หลักที่เก็บรูป Cover ทั้งหมด
-      const targetFolder = "W:\\Easy Product Guide\\All Product\\Cover_Photo";
+      const targetFolder = join(MOUNT_PATH, "All Product", "Cover_Photo");
       const files = await readdir(targetFolder);
 
       // ค้นหาไฟล์ที่ชื่อ (ไม่รวมนามสกุล) ตรงกับค่า Main ที่ส่งมา
@@ -109,7 +109,8 @@ app.get(
 
     try {
       const targetFolder = join(
-        "W:\\Easy Product Guide\\All Product",
+        MOUNT_PATH, 
+        "All Product",
         serie,
         code,
       );
@@ -153,7 +154,8 @@ app.get(
 
     try {
       const targetFolder = join(
-        "W:\\Easy Product Guide\\All Product",
+        MOUNT_PATH, 
+        "All Product",
         serie,
         code,
       );
@@ -200,7 +202,8 @@ app.get(
 
     try {
       const targetFolder = join(
-        "W:\\Easy Product Guide\\All Product",
+        MOUNT_PATH, 
+        "All Product",
         serie,
         code,
       );
@@ -244,7 +247,7 @@ app.get(
 
     try {
       // 2. สร้าง Path วิ่งไปที่ W:\Easy Product Guide\Materials\[ค่าที่ส่งมา]
-      const targetFolder = join("W:\\Easy Product Guide\\Materials", Main);
+      const targetFolder = join(MOUNT_PATH, "Materials", Main);
 
       console.log("Searching PDF in:", targetFolder);
 
@@ -278,8 +281,9 @@ app.get(
   "/api/Picture/Reference",
   async ({ query, set }) => {
     const { serie, code } = query;
+    
     const targetFolder = join(
-      "W:\\Easy Product Guide\\All Product",
+      MOUNT_PATH,"All Product",
       serie,
       code,
       "Project Reference",

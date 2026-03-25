@@ -1,3 +1,4 @@
+"use client";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 
@@ -12,7 +13,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch("http://localhost:5005/Group_MD");
+      const res = await fetch("http://192.168.10.23:5005/Group_MD");
       const data = await res.json();
 
       const filterData = data.filter((item: any) => {
@@ -36,7 +37,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
   const SelectProduct = (item: any) => {
     // ส่งค่า Product_name หรือค่าที่พี่จะเอาไปใช้ต่อในหน้าถัดไป
     onUpdate(item.Product_name);
-  };
+  };  
 
   return (
     <div className="grid grid-cols-5 gap-5 text-lg font-bold p-8 max-[500px]:grid-cols-1 max-[500px]:gap-2 max-[800px]:grid-cols-2 max-[800px]:gap-2 max-[1200px]:grid-cols-3 max-[1200px]:gap-2 max-[1600px]:grid-cols-4 max-[1600px]:gap-2">
@@ -52,7 +53,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                   <Image
                     loader={myLoader}
                     // ค้นหาตาม Product_Serie และ Product_name ตามที่พี่ต้องการ
-                    src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                    src={`http://192.168.10.23:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
                     width={200} // ปรับขนาดลงหน่อยเพื่อความเร็ว (Next.js จะช่วยจัดการให้)
                     height={200}
                     className="align-center justify-content-center"
@@ -69,7 +70,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                   <div key={index}>
                     <Image
                       loader={myLoader}
-                      src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                      src={`http://192.168.10.23:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
                       width={1000}
                       height={1000}
                       alt={`${item.Product_Serie}`}

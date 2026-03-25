@@ -99,7 +99,7 @@ export default function DataAdminPage() {
           workbook.Sheets[workbook.SheetNames[5]],
         );
         checkProgress();
-        await fetch("http://localhost:5005/upload-excel", {
+        await fetch("http://192.168.10.23:5005/upload-excel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ data: rows }),
@@ -123,7 +123,7 @@ export default function DataAdminPage() {
   const API_Test_Price = async () => {
     setPriceLoading(true); // เริ่มหมุน
     try {
-      const res = await fetch("http://localhost:5005/api/updatePrice");
+      const res = await fetch("http://192.168.10.23:5005/api/updatePrice");
       const data = await res.json();
       setPriceLoading(false); // หยุดหมุน
       alert(`Update Price สำเร็จ: ${data.message}`);

@@ -1,3 +1,4 @@
+"use client";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 
@@ -12,7 +13,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch("http://localhost:5005/Group_MD");
+      const res = await fetch("http://192.168.10.23:5005/Group_MD");
       const data = await res.json();
 
       const filterData = data.filter((item: any) => {
@@ -54,7 +55,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                 <div>
                   <Image
                     loader={myLoader}
-                    src={`${`http://localhost:5005/api/Cover/Photo?Main=${encodeURIComponent(item.split("|")[0])}`}`}
+                    src={`${`http://192.168.10.23:5005/api/Cover/Photo?Main=${encodeURIComponent(item.split("|")[0])}`}`}
                     width={1000}
                     height={1000}
                     alt={`${item}`}
@@ -73,7 +74,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                   <div key={index}>
                     <Image
                       loader={myLoader}
-                      src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                      src={`http://192.168.10.23:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
                       width={1000}
                       height={1000}
                       alt={`${item.Product_Serie}`}

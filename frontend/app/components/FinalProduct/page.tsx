@@ -1,3 +1,4 @@
+"use client";
 import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 
@@ -34,7 +35,7 @@ export default function Page({ ValueToggle }: MainProps) {
 
   const fetchData = async () => {
     try {
-      const res = await fetch("http://localhost:5005/Group_MD");
+      const res = await fetch("http://192.168.10.23:5005/Group_MD");
       const data = await res.json();
       setView_MD(data);
 
@@ -104,7 +105,7 @@ export default function Page({ ValueToggle }: MainProps) {
       if (product_Serie_Toggle && currentShowName) {
         try {
           const res = await fetch(
-            `http://localhost:5005/api/Picture/Reference?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`,
+            `http://192.168.10.23:5005/api/Picture/Reference?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`,
           );
           const data = await res.json();
           setReferenceImages(Array.isArray(data) ? data : []);
@@ -152,7 +153,7 @@ export default function Page({ ValueToggle }: MainProps) {
           <div className="relative w-full aspect-square">
             <Image
               loader={myLoader}
-              src={`http://localhost:5005/api/Picture/Product?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`}
+              src={`http://192.168.10.23:5005/api/Picture/Product?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`}
               fill
               className="object-contain"
               alt={currentShowName}
@@ -298,7 +299,7 @@ export default function Page({ ValueToggle }: MainProps) {
                   <div className="w-[160px] h-[160px] relative bg-white rounded-lg overflow-hidden shadow-sm">
                     <Image
                       loader={myLoader}
-                      src={`http://localhost:5005/api/Picture/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                      src={`http://192.168.10.23:5005/api/Picture/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
                       width={160}
                       height={160}
                       className="object-contain w-full h-full"
@@ -332,7 +333,7 @@ export default function Page({ ValueToggle }: MainProps) {
             <iframe
               className="w-full h-full"
               title="catalog"
-              src={`http://localhost:5005/api/Document/Product?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`}
+              src={`http://192.168.10.23:5005/api/Document/Product?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`}
             />
           </div>
         </div>
@@ -351,7 +352,7 @@ export default function Page({ ValueToggle }: MainProps) {
             <iframe
               className="w-full h-full"
               title="color"
-              src={`http://localhost:5005/api/Material?Main=${encodeURIComponent(getHeader)}`}
+              src={`http://192.168.10.23:5005/api/Material?Main=${encodeURIComponent(getHeader)}`}
             />
           </div>
         </div>
@@ -375,7 +376,7 @@ export default function Page({ ValueToggle }: MainProps) {
             <iframe
               className="w-full h-full border-none"
               title="drawing"
-              src={`http://localhost:5005/api/Drawing?code=${encodeURIComponent(currentShowName)}`}
+              src={`http://192.168.10.23:5005/api/Drawing?code=${encodeURIComponent(currentShowName)}`}
             />
           </div>
         </div>

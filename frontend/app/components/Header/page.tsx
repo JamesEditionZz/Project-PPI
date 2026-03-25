@@ -13,7 +13,7 @@ export default function page({ onUpdate }: MainProps) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch("http://localhost:5005/Get_Products");
+      const res = await fetch("http://192.168.10.23:5005/Get_Products");
       const data = await res.json();
       setDataProductGroup(data);
     };
@@ -38,7 +38,7 @@ export default function page({ onUpdate }: MainProps) {
             <div>
               <Image
                 loader={myLoader}
-                src={`${`http://localhost:5005/api/Cover/Photo?Main=${encodeURIComponent(item.Product_Type.split("|")[0])}`}`}
+                src={`${`http://192.168.10.23:5005/api/Cover/Photo?Main=${encodeURIComponent(item.Product_Type.split("|")[0])}`}`}
                 width={1000}
                 height={1000}
                 alt={`${item}`}
