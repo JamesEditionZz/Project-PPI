@@ -3,6 +3,7 @@ import cors from "@elysiajs/cors";
 import sql from "mssql";
 import path, { join } from "path";
 import { readdir } from "fs/promises";
+import { existsSync } from "fs";
 
 const dbconnecting = {
   user: "sa",
@@ -39,25 +40,223 @@ app.get("/Get_Products", async () => {
   const pool = await sql.connect(dbconnecting);
   try {
     const result = await pool.query("SELECT * FROM Product_Group");
-    return result.recordset;
+    // return result.recordset;
+  } catch (error) {
+    console.error("Database query failed:", error);
+    // return { error: "Failed to fetch products" };
+  }
+});
+
+app.post("/Group_MD", async ({ body }) => {
+  const pool = await sql.connect(dbconnecting);
+
+  console.log(body);
+
+  try {
+    if (body.split(":")[0] === "Header") {
+      const result = await pool
+        .request()
+        .input("Header", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Header = @Header ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Main") {
+      const result = await pool
+        .request()
+        .input("Main", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Type_Main = @Main ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Sub") {
+      const result = await pool
+        .request()
+        .input("Sub", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Type_Sub = @Sub ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Sub2") {
+      const result = await pool
+        .request()
+        .input("Sub2", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Type_Sub2 = @Sub2 ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Sub3") {
+      const result = await pool
+        .request()
+        .input("Sub3", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Type_Sub3 = @Sub3 ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Sub4") {
+      const result = await pool
+        .request()
+        .input("Sub4", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Type_Sub4 = @Sub4 ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Serie") {
+      const result = await pool
+        .request()
+        .input("Serie", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_Serie = @Serie ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    } else if (body.split(":")[0] === "Product") {
+      const result = await pool
+        .request()
+        .input("Product", sql.VarChar, body.split(":")[1]).query(`
+      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG WHERE Product_name = @Product ORDER BY Product.Product_Name ASC
+    `);
+
+      return result.recordset;
+    }
   } catch (error) {
     console.error("Database query failed:", error);
     return { error: "Failed to fetch products" };
   }
 });
 
-app.get("/Group_MD", async ({ body }) => {
-  const pool = await sql.connect(dbconnecting);
-
+app.get("/API/Full_Product", async ({ query }) => {
   try {
-    const result = await pool.request().query(`
-      SELECT * FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG ORDER BY Product.Product_Name ASC
-    `);
+    const pool = await sql.connect(dbconnecting);
 
-    return result.recordset;
+    const res = await pool.request().query(
+      `SELECT Product.Product_FG,
+        Product.Product_Serie,
+        Product.Product_name,
+        Product.Product_Code,
+        Product.Description,
+        MD_View.Product_Header,
+        MD_View.Product_Type_Main,
+        MD_View.Product_Type_Sub,
+        MD_View.Product_Type_Sub2,
+        MD_View.Sub_Product_1,
+        MD_View.Sub_Product_2,
+        MD_View.Sub_Product_3,
+        MD_View.Sub_Product_4,
+        MD_View.Sub_Product_5,
+        MD_View.Product_Header_TH,
+        MD_View.Product_Type_Main_TH,
+        MD_View.Product_Type_Sub_TH,
+        MD_View.Product_Type_Sub2_TH,
+        Product.Product_Path_img,
+        Product.Product_price,
+        Product.Price_Validity,
+        Product.Product_Family
+        
+        FROM Product INNER JOIN MD_View ON Product.Product_FG = MD_View.Product_FG ORDER BY Product_Name ASC`,
+    );
+
+    const products = res.recordset;
+
+    // --- วนลูปเช็คไฟล์ PDF ของแต่ละตัว ---
+    const results = await Promise.all(
+      products.map(async (product: any) => {
+        let FileMaterial = false;
+        let FileCatalog = false;
+        let FileDrawing = false;
+        let FileReference = false;
+        let refCount = 0;
+
+        try {
+          // ใช้ค่า Product_FG (หรือ Product_name ตามที่พี่ตั้งชื่อโฟลเดอร์ไว้)
+          // ในที่นี้ผมสมมติว่าชื่อโฟลเดอร์ตรงกับ Product_FG นะครับ
+          const cleanFolderName = product.Product_Header
+            ? product.Product_Header.replace(/^\d+\s+/, "")
+            : "";
+          const targetFolderMaterial = join(
+            MOUNT_PATH,
+            "Materials",
+            cleanFolderName,
+          );
+          const targetFolderCatalog = join(
+            MOUNT_PATH,
+            "All Product",
+            product.Product_Serie,
+            product.Product_name,
+          );
+          const targetFolderDrawing = join(
+            MOUNT_PATH,
+            "All Product",
+            product.Product_Serie,
+            product.Product_name,
+            "Drawing",
+          );
+          const targetFolderReference = join(
+            MOUNT_PATH,
+            "All Product",
+            product.Product_Serie,
+            product.Product_name,
+            "Project Reference",
+          );
+
+          if (existsSync(targetFolderMaterial)) {
+            const files = await readdir(targetFolderMaterial);
+            // เช็คว่ามีไฟล์ .pdf ไหม
+            FileMaterial = files.some((file) =>
+              file.toLowerCase().endsWith(".pdf"),
+            );
+          }
+
+          if (existsSync(targetFolderCatalog)) {
+            const files = await readdir(targetFolderCatalog);
+            // เช็คว่ามีไฟล์ .pdf ไหม
+            FileCatalog = files.some((file) =>
+              file.toLowerCase().endsWith(".pdf"),
+            );
+          }
+
+          if (existsSync(targetFolderDrawing)) {
+            const files = await readdir(targetFolderDrawing);
+            // เช็คว่ามีไฟล์ .pdf ไหม
+            FileDrawing = files.some((file) =>
+              file.toLowerCase().endsWith(".pdf"),
+            );
+          }
+
+          if (existsSync(targetFolderReference)) {
+            const filesRef = await readdir(targetFolderReference);
+            // กรองนับเฉพาะไฟล์รูปภาพ
+            const imageFiles = filesRef.filter((file) => {
+              const ext = file.toLowerCase();
+              return (
+                ext.endsWith(".jpg") ||
+                ext.endsWith(".jpeg") ||
+                ext.endsWith(".png") ||
+                ext.endsWith(".webp")
+              );
+            });
+            refCount = imageFiles.length;
+          }
+        } catch (err) {
+          // ถ้าโฟลเดอร์ไม่มี หรือเข้าไม่ได้ ให้เป็น false
+          FileMaterial = false;
+          FileCatalog = false;
+          FileDrawing = false;
+        }
+
+        // คืนค่า Object เดิม + สถานะไฟล์
+        return {
+          ...product,
+          Material: FileMaterial,
+          Catalog: FileCatalog,
+          Drawing: FileDrawing,
+          Reference: refCount,
+        };
+      }),
+    );
+
+    return results; // ส่ง Array ที่รวมสถานะไฟล์แล้วไปให้ Frontend
   } catch (error) {
-    console.error("Database query failed:", error);
-    return { error: "Failed to fetch products" };
+    console.error(error);
   }
 });
 
@@ -108,12 +307,7 @@ app.get(
     const { serie, code } = query; // รับแค่ serie กับ code
 
     try {
-      const targetFolder = join(
-        MOUNT_PATH, 
-        "All Product",
-        serie,
-        code,
-      );
+      const targetFolder = join(MOUNT_PATH, "All Product", serie, code);
 
       console.log(targetFolder);
 
@@ -153,12 +347,7 @@ app.get(
     const { serie, code } = query; // รับแค่ serie กับ code
 
     try {
-      const targetFolder = join(
-        MOUNT_PATH, 
-        "All Product",
-        serie,
-        code,
-      );
+      const targetFolder = join(MOUNT_PATH, "All Product", serie, code);
 
       const files = await readdir(targetFolder);
 
@@ -201,12 +390,7 @@ app.get(
     }
 
     try {
-      const targetFolder = join(
-        MOUNT_PATH, 
-        "All Product",
-        serie,
-        code,
-      );
+      const targetFolder = join(MOUNT_PATH, "All Product", serie, code);
 
       const files = await readdir(targetFolder);
 
@@ -281,9 +465,10 @@ app.get(
   "/api/Picture/Reference",
   async ({ query, set }) => {
     const { serie, code } = query;
-    
+
     const targetFolder = join(
-      MOUNT_PATH,"All Product",
+      MOUNT_PATH,
+      "All Product",
       serie,
       code,
       "Project Reference",
@@ -323,7 +508,94 @@ app.get(
   },
 );
 
-let uploadProgress = 0;
+app.get(
+  "/api/Picture/ReferenceNonFG",
+  async ({ query, set }) => {
+    const { serie } = query;
+
+    const targetFolder = join(
+      MOUNT_PATH,
+      "All Product",
+      serie,
+      "Project Reference",
+    );
+
+    try {
+      const files = await readdir(targetFolder);
+
+      // กรองไฟล์รูปทั้งหมด
+      const imageFiles = files.filter((file) =>
+        /\.(jpg|jpeg|png|webp|gif)$/.test(file.toLowerCase()),
+      );
+
+      // อ่านไฟล์ทั้งหมดพร้อมกัน (Parallel) แล้วแปลงเป็น Base64
+      const imagesData = await Promise.all(
+        imageFiles.map(async (file) => {
+          const filePath = join(targetFolder, file);
+          const buffer = await Bun.file(filePath).arrayBuffer();
+          const base64 = Buffer.from(buffer).toString("base64");
+
+          // หานามสกุลไฟล์เพื่อทำ Data URI
+          const ext = file.split(".").pop();
+          return `data:image/${ext};base64,${base64}`;
+        }),
+      );
+
+      return imagesData;
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+      code: t.String(),
+    }),
+  },
+);
+
+// 1. ตัวแปรเก็บสถานะ Progress (ประกาศไว้นอก Route)
+let currentProgress = 0;
+
+// --- Endpoint สำหรับให้ FrontEnd มา Get ค่า Progress ---
+app.get("/upload-progress", () => {
+  return { progress: currentProgress };
+});
+
+// --- Endpoint หลักที่ใช้บันทึกข้อมูลลง SQL ---
+app.post("/API/Save_To_SQL", async ({ body, set }) => {
+  try {
+    const dataArray = body as any[]; // สมมติว่าส่ง Array มาบันทึกเยอะๆ
+    const total = dataArray.length;
+    currentProgress = 0; // Reset progress ก่อนเริ่มงานใหม่
+
+    const pool = await sql.connect(dbconnecting);
+
+    for (let i = 0; i < total; i++) {
+      // Logic การบันทึก SQL ของพี่
+      await pool
+        .request()
+        .input("val", dataArray[i].someValue)
+        .query("INSERT INTO YourTable ...");
+
+      // 2. คำนวณ % และอัปเดตตัวแปรกลาง
+      currentProgress = Math.round(((i + 1) / total) * 100);
+
+      // (Optional) console.log เพื่อเช็คที่ฝั่ง Server
+      // console.log(`Progress: ${currentProgress}%`);
+    }
+
+    // เมื่อเสร็จสิ้น มั่นใจว่า 100%
+    currentProgress = 100;
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    currentProgress = 0; // ถ้าพังให้รีเซ็ต
+    set.status = 500;
+    return { error: "Failed to save" };
+  }
+});
 
 app.post("/upload-excel", async ({ body }) => {
   try {
@@ -334,7 +606,7 @@ app.post("/upload-excel", async ({ body }) => {
     await pool.request().query("DELETE Product");
     await pool.request().query("DELETE MD_View");
 
-    uploadProgress = 0;
+    currentProgress = 0;
 
     for (let i = 0; i < total; i++) {
       const row = data[i];
@@ -378,6 +650,21 @@ app.post("/upload-excel", async ({ body }) => {
           sql.VarChar,
           safeString(row["STS_Product_SUB TYPE 2"]),
         )
+        .input(
+          "Product_Type_Sub3",
+          sql.VarChar,
+          safeString(row["STS_Product_SUB TYPE 3"]),
+        )
+        .input(
+          "Product_Type_Sub4",
+          sql.VarChar,
+          safeString(row["STS_Product_SUB TYPE 4"]),
+        )
+        .input(
+          "Product_Type_Sub5",
+          sql.VarChar,
+          safeString(row["STS_Product_SUB TYPE 5"]),
+        )
         .input("Sub_Product_1", sql.VarChar, safeString(row["Sub_Product 1"]))
         .input("Sub_Product_2", sql.VarChar, safeString(row["Sub_Product 2"]))
         .input("Sub_Product_3", sql.VarChar, safeString(row["Sub_Product 3"]))
@@ -397,16 +684,33 @@ app.post("/upload-excel", async ({ body }) => {
           "Product_Type_Sub2_TH",
           sql.VarChar,
           safeString(row["Product_SUB TYPE 2_TH"]),
+        )
+        .input(
+          "Product_Type_Sub3_TH",
+          sql.VarChar,
+          safeString(row["Product_SUB TYPE 3_TH"]),
+        )
+        .input(
+          "Product_Type_Sub4_TH",
+          sql.VarChar,
+          safeString(row["Product_SUB TYPE 4_TH"]),
+        )
+        .input(
+          "Product_Type_Sub5_TH",
+          sql.VarChar,
+          safeString(row["Product_SUB TYPE 5_TH"]),
         ).query(`
         INSERT INTO MD_View
-        (Product_FG, Product_Header, Product_Type_Main, Product_Type_Sub, Product_Type_Sub2,
-         Sub_Product_1, Sub_Product_2, Sub_Product_3, Sub_Product_4, Sub_Product_5, Product_Type_Main_TH, Product_Type_Sub_TH, Product_Type_Sub2_TH)
+        (Product_FG, Product_Header, Product_Type_Main, Product_Type_Sub, Product_Type_Sub2, Product_Type_Sub3, Product_Type_Sub4, Product_Type_Sub5,
+         Sub_Product_1, Sub_Product_2, Sub_Product_3, Sub_Product_4, Sub_Product_5, 
+         Product_Type_Main_TH, Product_Type_Sub_TH, Product_Type_Sub2_TH, Product_Type_Sub3_TH, Product_Type_Sub4_TH, Product_Type_Sub5_TH)
         VALUES
-        (@Product_FG, @Product_Header, @Product_Type_Main, @Product_Type_Sub, @Product_Type_Sub2,
-         @Sub_Product_1, @Sub_Product_2, @Sub_Product_3, @Sub_Product_4, @Sub_Product_5, @Product_Type_Main_TH, @Product_Type_Sub_TH, @Product_Type_Sub2_TH)
+        (@Product_FG, @Product_Header, @Product_Type_Main, @Product_Type_Sub, @Product_Type_Sub2, @Product_Type_Sub3, @Product_Type_Sub4, @Product_Type_Sub5,
+         @Sub_Product_1, @Sub_Product_2, @Sub_Product_3, @Sub_Product_4, @Sub_Product_5, 
+         @Product_Type_Main_TH, @Product_Type_Sub_TH, @Product_Type_Sub2_TH, @Product_Type_Sub3_TH, @Product_Type_Sub4_TH, @Product_Type_Sub5_TH)
       `);
 
-      uploadProgress = Math.round(((i + 1) / total) * 100);
+      currentProgress = Math.round(((i + 1) / total) * 100);
     }
   } catch (err) {
     console.error(err);

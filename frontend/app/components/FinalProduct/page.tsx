@@ -35,14 +35,20 @@ export default function Page({ ValueToggle }: MainProps) {
 
   const fetchData = async () => {
     try {
-      const res = await fetch("http://192.168.10.23:5005/Group_MD");
+      const res = await fetch("http://localhost:5005/Group_MD", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(`Product:${ValueToggle[13]}`),
+      });
+
       const data = await res.json();
+
       setView_MD(data);
 
-      // กรองหา Family เริ่มต้นจาก ValueToggle[9] (ชื่อ Serie)
-      if (ValueToggle && ValueToggle[9]) {
+      // กรองหา Family เริ่มต้นจาก ValueToggle[13] (ชื่อ Serie)
+      if (ValueToggle && ValueToggle[13]) {
         const familyData = data.filter(
-          (item: any) => item.Product_name === ValueToggle[9],
+          (item: any) => item.Product_name === ValueToggle[13],
         );
         const Serie = familyData[0]?.Product_Serie || "";
         const filterfamilyData = data.filter(
@@ -58,7 +64,7 @@ export default function Page({ ValueToggle }: MainProps) {
 
   // 2. คำนวณรหัสสินค้าที่มีทั้งหมด (ตารางข้อมูล)
   const Product_Model = useMemo(() => {
-    const searchTerm = product_name_Toggle || (ValueToggle && ValueToggle[9]);
+    const searchTerm = product_name_Toggle || (ValueToggle && ValueToggle[13]);
     if (!searchTerm) return [];
 
     // กรองเอาเฉพาะตัวที่รหัสตรงกับชื่อรุ่นที่เลือก
@@ -82,8 +88,6 @@ export default function Page({ ValueToggle }: MainProps) {
     );
   }, [sub2]);
 
-  console.log(sub2);
-
   // 4. ตั้งค่า Default เมื่อ Product_Model โหลดมาครั้งแรก
   useEffect(() => {
     if (Product_Model.length > 0 && !hasDefaultSet) {
@@ -98,7 +102,7 @@ export default function Page({ ValueToggle }: MainProps) {
 
   // 5. ดึงรูป Reference เมื่อมีการเปลี่ยนสินค้า
   const currentShowName =
-    product_name_Toggle || (ValueToggle && ValueToggle[9]);
+    product_name_Toggle || (ValueToggle && ValueToggle[13]);
 
   useEffect(() => {
     const getReferences = async () => {

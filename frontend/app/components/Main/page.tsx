@@ -13,22 +13,21 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch("http://192.168.10.23:5005/Group_MD");
+      const res = await fetch("http://localhost:5005/Group_MD", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(`Header:${ValueToggle[1]}`),
+      });
+
       const data = await res.json();
 
-      const filterData = data.filter((item: any) => {
-        const searchTerm = ValueToggle && ValueToggle[1];
-
-        if (searchTerm && item.Product_Header) {
-          return item.Product_Header.includes(searchTerm);
-        }
-
-        return false;
-      });
-      setView_MD(filterData);
+      setView_MD(data);
     };
     fetchData();
   }, []);
+
+  console.log(view_MD);
+  
 
   const uniqueProductTypes = Array.from(
     new Set(
@@ -48,29 +47,29 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
         return (
           <div key={index}>
             {/* {item.split("|")[0] !== "null" ? ( */}
-              <div
-                className="cursor-pointer box-size-Images"
-                onClick={() => SelectProduct(item)}
-              >
-                <div>
-                  <Image
-                    loader={myLoader}
-                    src={`${`http://192.168.10.23:5005/api/Cover/Photo?Main=${encodeURIComponent(item.split("|")[0])}`}`}
-                    width={1000}
-                    height={1000}
-                    alt={`${item}`}
-                  />
-                </div>
-                <div className="text-center text-base/6 p-1 bg-neutral-700 text-white font-normal font-san mt-auto">
-                  <div>{item.split("|")[0].split(" ").slice(1).join(" ")}</div>
-                </div>
-                <div className="text-center text-base/6 p-1 bg-neutral-500 text-white font-normal font-san">
-                  {item.split("|")[1]}
-                </div>
+            <div
+              className="cursor-pointer box-size-Images"
+              onClick={() => SelectProduct(item)}
+            >
+              <div>
+                <Image
+                  loader={myLoader}
+                  src={`${`http://192.168.10.23:5005/api/Cover/Photo?Main=${encodeURIComponent(item.split("|")[0])}`}`}
+                  width={1000}
+                  height={1000}
+                  alt={`${item}`}
+                />
               </div>
+              <div className="text-center text-base/6 p-1 bg-neutral-700 text-white font-normal font-san mt-auto">
+                <div>{item.split("|")[0].split(" ").slice(1).join(" ")}</div>
+              </div>
+              <div className="text-center text-base/6 p-1 bg-neutral-500 text-white font-normal font-san">
+                {item.split("|")[1]}
+              </div>
+            </div>
             {/* ) : ( */}
-              <>
-                {/* {view_MD.sort().map((item, index) => (
+            <>
+              {/* {view_MD.sort().map((item, index) => (
                   <div key={index}>
                     <Image
                       loader={myLoader}
@@ -81,7 +80,7 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
                     />
                   </div>
                 ))} */}
-              </>
+            </>
             {/* )} */}
           </div>
         );

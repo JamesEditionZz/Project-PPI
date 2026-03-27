@@ -29,8 +29,9 @@ export default function DataAdminPage() {
   // --- [Logic เดิม: Fetch & Filter] ---
   useEffect(() => {
     const datafecth = async () => {
-      const res = await fetch("http://192.168.10.23:5005/API/Product");
+      const res = await fetch("http://192.168.10.23:5005/API/Full_Product");
       const data = await res.json();
+
       setGetData(data);
       setBackupData(data);
     };
@@ -69,7 +70,7 @@ export default function DataAdminPage() {
   const checkProgress = () => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("http://192.168.10.23:5005/upload-progress");
+        const res = await fetch("http://localhost:5005/upload-progress");
         const data = await res.json();
         setProgress(data.progress);
         if (data.progress >= 100) {
@@ -99,7 +100,7 @@ export default function DataAdminPage() {
           workbook.Sheets[workbook.SheetNames[5]],
         );
         checkProgress();
-        await fetch("http://192.168.10.23:5005/upload-excel", {
+        await fetch("http://localhost:5005/upload-excel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ data: rows }),
@@ -110,6 +111,12 @@ export default function DataAdminPage() {
       }
     };
     input.click();
+
+    const res = await fetch("http://192.168.10.23:5005/API/Full_Product");
+    const data = await res.json();
+
+    setGetData(data);
+    setBackupData(data);
   };
 
   const ExportExcel = () => {
@@ -376,7 +383,10 @@ export default function DataAdminPage() {
               ))}
               <th className="p-4 text-right">Price</th>
               <th className="p-4 text-center">Preview</th>
-              <th className="p-4 text-center">Files</th>
+              <th className="p-4 text-center">Catelog</th>
+              <th className="p-4 text-center">Meterial</th>
+              <th className="p-4 text-center">Drawing</th>
+              <th className="p-4 text-center">Reference</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -409,17 +419,34 @@ export default function DataAdminPage() {
                   <div className="w-12 h-12 mx-auto relative border rounded-lg overflow-hidden bg-white group-hover:scale-125 transition-transform duration-200">
                     <Image
                       loader={myLoader}
-                      src={`http://192.168.10.23:5005/api/get_image_by_pattern?path=${encodeURIComponent(item.Product_Path_img || "")}&pattern=${encodeURIComponent(item.Product_name?.split("|")[0])}`}
-                      fill
-                      alt="p"
-                      className="object-contain p-1"
+                      src={`http://192.168.10.23:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                      width={1000}
+                      height={1000}
+                      alt={`${item.Product_Serie}`}
                     />
                   </div>
                 </td>
                 <td className="p-4 text-center">
                   <span
-                    className={`inline-block w-2 h-2 rounded-full ${item.Product_Path_img ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500"}`}
+                    className={`inline-block w-2 h-2 rounded-full ${item.Catalog ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500"}`}
                   />
+                </td>
+                <td className="p-4 text-center">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${item.Material ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500"}`}
+                  />
+                </td>
+                <td className="p-4 text-center">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${item.Drawing ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500"}`}
+                  />
+                </td>
+                <td className="p-4 text-center">
+                  {item.Reference > 0 ? (
+                    <div className="text-green-600">{item.Reference}</div>
+                  ) : (
+                    <div className="text-red-600">0</div>
+                  )}
                 </td>
               </tr>
             ))}

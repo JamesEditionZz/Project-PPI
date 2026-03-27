@@ -795,3 +795,8 @@ body {
   overflow: auto !important;
   height: 300px !important;
 }
+
+.cursor-poiter-red:hover{
+  cursor: pointer;
+  color: rgb(155, 155, 155);
+}

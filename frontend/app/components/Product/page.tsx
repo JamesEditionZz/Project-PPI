@@ -17,9 +17,9 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
       const data = await res.json();
 
       const filterData = data.filter((item: any) => {
-        const searchTerm = ValueToggle && ValueToggle[7];
-        if (searchTerm && item.Product_Type_Sub2) {
-          return item.Product_Type_Sub2.includes(searchTerm);
+        const searchTerm = ValueToggle && ValueToggle[11];
+        if (searchTerm && item.Product_Type_Sub4) {
+          return item.Product_Type_Sub4.includes(searchTerm);
         }
         return false;
       });
@@ -27,14 +27,14 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
       setView_MD(filterData);
     };
     fetchData();
-  }, [ValueToggle]); // เพิ่ม dependency เพื่อให้กรองใหม่เมื่อ ValueToggle เปลี่ยน
+  }, [ValueToggle]); // เพิ่ม dependency เพื่อให้กรองใหม่เมื่อ ValueToggle เปลี่ยน  
 
   // กรองให้เหลือแค่รายการที่ชื่อไม่ซ้ำกัน
   const uniqueProductTypes = Array.from(
     new Map(view_MD.map((item: any) => [item.Product_name, item])).values(),
   );
 
-  const SelectProduct = (item: any) => {
+  const SelectProduct = (item: any) => {    
     // ส่งค่า Product_name หรือค่าที่พี่จะเอาไปใช้ต่อในหน้าถัดไป
     onUpdate(item.Product_name);
   };  
