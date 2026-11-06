@@ -12,9 +12,9 @@ import Product from "./Product/page";
 import FinalProduct from "./FinalProduct/page";
 import IdleLogoutTimer from "../CheckAction/page";
 
-useEffect(() => {
-  IdleLogoutTimer();
-});
+// useEffect(() => {
+//   IdleLogoutTimer();
+// });
 
 export default function Page() {
   const [selectedFilters, setSelectedFilters] = React.useState<
@@ -442,6 +442,10 @@ export default function Page() {
       return arr;
     });
   };
+
+  const activeStep = Toggle.filter(
+    (item) => item !== "" && item !== " > " && item !== null && item !== undefined,
+  ).length;
 
   const SubmitReport = async () => {
     try {
@@ -909,35 +913,35 @@ export default function Page() {
           </div>
           {filterData.length === 0 ? (
             <>
-              {Toggle.length === 0 ? (
+              {activeStep === 0 ? (
                 <Header onUpdate={SelectProduct} />
-              ) : Toggle.length === 2 ? (
+              ) : activeStep === 1 ? (
                 <Main ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : Toggle.length === 4 ? (
+              ) : activeStep === 2 ? (
                 <Sub ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : Toggle.length === 6 ? (
+              ) : activeStep === 3 ? (
                 <Sub2
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : Toggle.length === 8 ? (
+              ) : activeStep === 4 ? (
                 <Sub3
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : Toggle.length === 10 ? (
+              ) : activeStep === 5 ? (
                 <Sub4
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : Toggle.length === 12 ? (
+              ) : activeStep === 6 ? (
                 <Product ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : (
-                Toggle.length === 14 && <FinalProduct ValueToggle={Toggle} />
-              )}
+              ) : activeStep >= 7 ? (
+                <FinalProduct ValueToggle={Toggle} />
+              ) : null}
             </>
           ) : (
             <div className="grid grid-cols-5 gap-5 text-lg font-bold p-8 max-[600px]:grid-cols-1 max-[600px]:gap-2 max-[800px]:grid-cols-2 max-[800px]:gap-2 max-[1200px]:grid-cols-3 max-[1200px]:gap-2 max-[1600px]:grid-cols-4 max-[1600px]:gap-2">
