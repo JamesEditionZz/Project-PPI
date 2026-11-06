@@ -1,0 +1,24 @@
+{
+  "name": "backend",
+  "version": "1.0.50",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.3.3",
+    "@elysiajs/static": "^1.4.10",
+    "activedirectory2": "^2.2.0",
+    "bcrypt": "^6.0.0",
+    "elysia": "latest",
+    "ldapjs": "^3.0.7",
+    "mime": "^4.1.0",
+    "mssql": "^11.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "bun-types": "latest"
+  },
+  "module": "src/index.js"
+}
