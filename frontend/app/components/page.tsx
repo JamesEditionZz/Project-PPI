@@ -118,20 +118,24 @@ export default function Page() {
   }, []);
 
   const SelectProduct = (productType: string) => {
-    const parts = productType;
-    if (parts && parts.includes(":")) {
-      const splitParts = productType.split(":");
-      const type = splitParts[0].trim();
-      const data = splitParts[1].trim();
-      if (type === "Sub2") {
+    const [type, ...valueParts] = productType.split(":");
+    if (valueParts.length > 0) {
+      const data = valueParts.join(":").trim();
+      if (type.trim() === "Final_Product") {
+        setToggle((prev) => {
+          const next = [...prev.slice(0, 12)];
+          while (next.length < 12) next.push("");
+          return [...next, " > ", data];
+        });
+      } else if (type.trim() === "Sub2") {
         setToggle((prev) => [...prev, "", "", "", "", "", "", " > ", data]);
-      } else if (type === "Model") {
+      } else if (type.trim() === "Model") {
         setToggle((prev) => [...prev, "", "", "", "", " > ", data]);
-      } else if (type === "Special") {
+      } else if (type.trim() === "Special") {
         setToggle((prev) => [...prev, "", "", " > ", data]);
       }
     } else {
-      setToggle((prev) => [...prev, " > ", parts]);
+      setToggle((prev) => [...prev, " > ", productType]);
     }
   };
 
@@ -228,7 +232,9 @@ export default function Page() {
 
   const ShowReference = async (ValueReference: any) => {
     try {
-      const serie = ValueReference?.Product_Serie;
+      const serie = ValueReference?.Product_Serie ?? ValueReference;
+      if (!serie) return;
+
       const res = await fetch(
         `http://localhost:5005/api/Picture/ReferenceNonFG?serie=${encodeURIComponent(serie)}`,
       );
@@ -442,10 +448,6 @@ export default function Page() {
       return arr;
     });
   };
-
-  const activeStep = Toggle.filter(
-    (item) => item !== "" && item !== " > " && item !== null && item !== undefined,
-  ).length;
 
   const SubmitReport = async () => {
     try {
@@ -913,33 +915,33 @@ export default function Page() {
           </div>
           {filterData.length === 0 ? (
             <>
-              {activeStep === 0 ? (
+              {Toggle.length === 0 ? (
                 <Header onUpdate={SelectProduct} />
-              ) : activeStep === 1 ? (
+              ) : Toggle.length === 2 ? (
                 <Main ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : activeStep === 2 ? (
+              ) : Toggle.length === 4 ? (
                 <Sub ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : activeStep === 3 ? (
+              ) : Toggle.length === 6 ? (
                 <Sub2
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : activeStep === 4 ? (
+              ) : Toggle.length === 8 ? (
                 <Sub3
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : activeStep === 5 ? (
+              ) : Toggle.length === 10 ? (
                 <Sub4
                   ValueToggle={Toggle}
                   onUpdate={SelectProduct}
                   onReference={ShowReference}
                 />
-              ) : activeStep === 6 ? (
+              ) : Toggle.length === 12 ? (
                 <Product ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : activeStep >= 7 ? (
+              ) : Toggle.length >= 14 ? (
                 <FinalProduct ValueToggle={Toggle} />
               ) : null}
             </>

@@ -68,35 +68,27 @@ export default function page({
       (item) => item.Product_Type_Sub3 === ToggleProduct,
     );
 
-    const Check_FG = view_MD.filter(
-      (item) => item.Product_name === ToggleProduct,
-    );
-
     if (Check_Path.length > 0) {
       onUpdate(`Model:${ToggleProduct.split("|")[0]}`);
     } else {
-      if (
-        Check_FG[0]?.Product_FG[0].includes("FG") ||
-        Check_FG[0]?.Product_FG[0].includes("FM") ||
-        Check_FG[0]?.Product_FG[0].includes("FP")
-      ) {
-        onUpdate(`Model:${ToggleProduct.split("|")[0]}`);
-      } else {
-        onReference(Check_FG[0]?.Product_Serie);
-      }
+      onUpdate(`Final_Product:${ToggleProduct.split("|")[0]}`);
     }
   };
 
   const CheckProductReference = (Value: string) => {
     const Check_FG = view_MD.filter((item) => item.Product_name === Value);
+    const product = Check_FG[0];
+
+    if (!product) return;
+
     if (
-      Check_FG[0]?.Product_FG[0].includes("FG") ||
-      Check_FG[0]?.Product_FG[0].includes("FM") ||
-      Check_FG[0]?.Product_FG[0].includes("FP")
+      product.Product_FG?.[0]?.includes("FG") ||
+      product.Product_FG?.[0]?.includes("FM") ||
+      product.Product_FG?.[0]?.includes("FP")
     ) {
       onUpdate(`Model:${Value.split("|")[0]}`);
     } else {
-      onReference(Check_FG[0]?.Product_Serie);
+      onReference(product);
     }
   };
 
