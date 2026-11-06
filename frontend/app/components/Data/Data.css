@@ -1,0 +1,12 @@
+.btn-datalist {
+    top: 10px;
+    left: 10px;
+    display: flex;
+    position: fixed;
+    background-color: #ff0000;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+}
