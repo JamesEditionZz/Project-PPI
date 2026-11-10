@@ -51,7 +51,6 @@ export default function Page() {
 
     playAll();
 
-    // กลับมาที่แท็บแล้วให้เล่นต่อ
     const onVisible = () => {
       if (document.visibilityState === "visible") playAll();
     };
