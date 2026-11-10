@@ -1432,6 +1432,11 @@ app.get(
   async ({ query, set }) => {
     const { serie } = query;
 
+    if (!serie) {
+      set.status = 400;
+      return "Missing serie";
+    }
+
     const targetFolder = join(
       MOUNT_PATH,
       "All Product",
@@ -1469,7 +1474,7 @@ app.get(
   {
     query: t.Object({
       serie: t.String(),
-      code: t.String(),
+      code: t.Optional(t.String()),
     }),
   },
 );

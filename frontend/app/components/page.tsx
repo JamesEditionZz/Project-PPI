@@ -12,6 +12,10 @@ import Product from "./Product/page";
 import FinalProduct from "./FinalProduct/page";
 import IdleLogoutTimer from "../CheckAction/page";
 
+useEffect(() => {
+  IdleLogoutTimer();
+});
+
 export default function Page() {
   const [selectedFilters, setSelectedFilters] = React.useState<
     Record<number, string[]>
