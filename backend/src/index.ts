@@ -4,7 +4,7 @@ import sql from "mssql";
 import path, { join } from "path";
 import { readdir } from "fs/promises";
 import { existsSync } from "fs";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { staticPlugin } from "@elysiajs/static";
 const dbconnecting = {
@@ -19,7 +19,21 @@ const dbconnecting = {
   },
 };
 
+function safeResolve(root: string, ...parts: string[]) {
+  const base = resolve(root);
+  const target = resolve(base, ...parts);
+  if (target !== base && !target.startsWith(base + sep)) return null;
+  return target;
+}
+
 const pool = await sql.connect(dbconnecting);
+
+// Add the new optional member sub-department field to existing databases.
+// This is additive and preserves all existing member rows.
+await pool.request().query(`
+  IF COL_LENGTH('dbo.Member', 'Department_Sub') IS NULL
+    ALTER TABLE dbo.Member ADD Department_Sub NVARCHAR(255) NULL;
+`);
 
 const MOUNT_PATH = "/mnt/mount_path";
 
@@ -978,38 +992,59 @@ app.get(
 app.get(
   "/api/Document/Product",
   async ({ query, set }) => {
-    const { serie, code } = query; // รับแค่ serie กับ code ก็พอ (pattern ไม่ต้องใช้แล้ว)
+    const { serie, code } = query;
 
-    if (!serie || !code) {
+    const folder = safeResolve(MOUNT_PATH, "All Product", serie, code);
+    if (!folder) {
       set.status = 400;
-      return "Missing serie or code";
+      return "Invalid path";
     }
 
     try {
-      const targetFolder = join(MOUNT_PATH, "All Product", serie, code);
-
-      const files = await readdir(targetFolder);
-
-      // ค้นหาไฟล์แรกที่เป็น .pdf โดยไม่สนชื่อไฟล์
-      const pdfFile = files.find((file) => file.toLowerCase().endsWith(".pdf"));
-
-      if (pdfFile) {
-        const finalPath = join(targetFolder, pdfFile);
-        return Bun.file(finalPath);
-      }
-
-      set.status = 404;
-      return "No PDF file found in this folder";
-    } catch (error) {
-      console.error(error);
-      set.status = 500;
-      return "Folder not found or access denied";
+      const files = await readdir(folder);
+      return files
+        .filter((f) => /\.pdf$/i.test(f))
+        .map((name) => ({
+          name,
+          url: `/api/Document/Product/File?serie=${encodeURIComponent(serie)}&code=${encodeURIComponent(code)}&file=${encodeURIComponent(name)}`,
+        }));
+    } catch (err) {
+      console.error(err);
+      return [];
     }
   },
   {
     query: t.Object({
-      serie: t.String(),
-      code: t.String(),
+      serie: t.String({ minLength: 1 }),
+      code: t.String({ minLength: 1 }),
+    }),
+  },
+);
+
+// ส่งไฟล์ PDF
+app.get(
+  "/api/Document/Product/File",
+  async ({ query, set }) => {
+    const { serie, code, file } = query;
+
+    const filePath = safeResolve(MOUNT_PATH, "All Product", serie, code, file);
+    if (!filePath || !/\.pdf$/i.test(filePath)) {
+      set.status = 400;
+      return "Invalid path";
+    }
+
+    const f = Bun.file(filePath);
+    if (!(await f.exists())) {
+      set.status = 404;
+      return "PDF not found";
+    }
+    return f;
+  },
+  {
+    query: t.Object({
+      serie: t.String({ minLength: 1 }),
+      code: t.String({ minLength: 1 }),
+      file: t.String({ minLength: 1 }),
     }),
   },
 );
@@ -1017,40 +1052,56 @@ app.get(
 app.get(
   "/api/Material",
   async ({ query, set }) => {
-    // 1. รับค่า Main ตัวเดียวตามที่ Frontend ส่งมา
     const { Main } = query;
 
-    if (!Main) {
+    const folder = safeResolve(MOUNT_PATH, "Materials", Main);
+    if (!folder) {
       set.status = 400;
-      return "Missing Main parameter";
+      return "Invalid path";
     }
 
     try {
-      // 2. สร้าง Path วิ่งไปที่ W:\Easy Product Guide\Materials\[ค่าที่ส่งมา]
-      const targetFolder = join(MOUNT_PATH, "Materials", Main);
-
-      const files = await readdir(targetFolder);
-
-      // 3. หาไฟล์ .pdf ใบแรกที่เจอในโฟลเดอร์นั้น
-      const pdfFile = files.find((file) => file.toLowerCase().endsWith(".pdf"));
-
-      if (pdfFile) {
-        const finalPath = join(targetFolder, pdfFile);
-        return Bun.file(finalPath);
-      }
-
-      set.status = 404;
-      return "No PDF file found in this folder";
-    } catch (error) {
-      console.error(error);
-      set.status = 500;
-      return "Folder not found or access denied";
+      const files = await readdir(folder);
+      return files
+        .filter((f) => /\.pdf$/i.test(f))
+        .map((name) => ({
+          name,
+          url: `/api/Material/File?Main=${encodeURIComponent(Main)}&file=${encodeURIComponent(name)}`,
+        }));
+    } catch (err) {
+      console.error(err);
+      return [];
     }
   },
   {
-    // 4. แก้ Validation ให้ตรวจเช็คค่า Main
     query: t.Object({
-      Main: t.String(),
+      Main: t.String({ minLength: 1 }),
+    }),
+  },
+);
+
+app.get(
+  "/api/Material/File",
+  async ({ query, set }) => {
+    const { Main, file } = query;
+
+    const filePath = safeResolve(MOUNT_PATH, "Materials", Main, file);
+    if (!filePath || !/\.pdf$/i.test(filePath)) {
+      set.status = 400;
+      return "Invalid path";
+    }
+
+    const f = Bun.file(filePath);
+    if (!(await f.exists())) {
+      set.status = 404;
+      return "PDF not found";
+    }
+    return f;
+  },
+  {
+    query: t.Object({
+      Main: t.String({ minLength: 1 }),
+      file: t.String({ minLength: 1 }),
     }),
   },
 );
@@ -1153,44 +1204,225 @@ app.get(
   "/api/Drawing",
   async ({ query, set }) => {
     const { serie, code } = query;
-    if (!serie) {
-      set.status = 400;
-      return "Missing serie";
-    }
-
-    const targetFolder = join(
-      MOUNT_PATH,
-      "All Product",
-      serie,
-      code,
-      "Drawing",
-    );
 
     try {
-      const files = await readdir(targetFolder);
+      const folder = join(MOUNT_PATH, "All Product", serie, code, "Drawing");
+      const files = await readdir(folder);
 
-      // ค้นหาไฟล์แรกที่เป็น รูป หรือ PDF
-      const targetFile = files.find((file) =>
-        /\.(pdf)$/.test(file.toLowerCase()),
-      );
-
-      if (targetFile) {
-        const finalPath = join(targetFolder, targetFile);
-        return Bun.file(finalPath);
-      }
-
-      set.status = 404;
-      return "No Drawing file found";
-    } catch (error) {
-      console.error(error);
-      set.status = 500;
-      return "Folder not found or access denied";
+      return files
+        .filter((f) => /\.pdf$/i.test(f))
+        .map((name) => ({
+          name,
+          url: `/api/Drawing/File?serie=${encodeURIComponent(serie)}&code=${encodeURIComponent(code)}&file=${encodeURIComponent(name)}`,
+        }));
+    } catch (err) {
+      console.error(err);
+      return []; // ไม่มีโฟลเดอร์ = ไม่มีไฟล์ ให้ frontend จัดการเอง
     }
   },
   {
     query: t.Object({
       serie: t.String(),
-      code: t.Optional(t.String()),
+      code: t.String(),
+    }),
+  },
+);
+
+import { resolve, sep } from "path";
+
+app.get(
+  "/api/Drawing/File",
+  async ({ query, set }) => {
+    const { serie, code, file } = query;
+
+    const folder = resolve(MOUNT_PATH, "All Product", serie, code, "Drawing");
+    const filePath = resolve(folder, file);
+
+    // กันหลุดออกนอกโฟลเดอร์
+    if (!filePath.startsWith(folder + sep)) {
+      set.status = 400;
+      return "Invalid path";
+    }
+
+    const f = Bun.file(filePath);
+    if (!(await f.exists())) {
+      set.status = 404;
+      return "PDF not found";
+    }
+
+    return f;
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+      code: t.String(),
+      file: t.String(),
+    }),
+  },
+);
+
+app.get(
+  "/api/Spec",
+  async ({ query, set }) => {
+    const { serie } = query;
+
+    if (!serie) {
+      set.status = 400;
+      return {
+        message: "Missing serie",
+      };
+    }
+
+    try {
+      const targetFolder = join(MOUNT_PATH, "All Product", serie, "Spec");
+      const files = await readdir(targetFolder);
+
+      // ดึงเฉพาะไฟล์ PDF
+      const pdfFiles = files.filter((file) =>
+        file.toLowerCase().endsWith(".pdf"),
+      );
+
+      if (pdfFiles.length === 0) {
+        set.status = 404;
+        return {
+          message: "No PDF files found",
+        };
+      }
+
+      return pdfFiles.map((file) => ({
+        name: file,
+        url: `/api/Spec/File?serie=${encodeURIComponent(
+          serie,
+        )}&file=${encodeURIComponent(file)}`,
+      }));
+    } catch (error) {
+      console.error(error);
+      set.status = 500;
+      return {
+        message: "Folder not found or access denied",
+      };
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+    }),
+  },
+);
+
+app.get(
+  "/api/Spec/File",
+  async ({ query, set }) => {
+    const { serie, file } = query;
+
+    try {
+      const filePath = join(
+        MOUNT_PATH,
+        "All Product",
+        serie,
+        "Spec",
+        decodeURIComponent(file),
+      );
+
+      if (!existsSync(filePath)) {
+        set.status = 404;
+        return "PDF not found";
+      }
+
+      return Bun.file(filePath);
+    } catch (err) {
+      console.error(err);
+      set.status = 500;
+      return "Internal Server Error";
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+      file: t.String(),
+    }),
+  },
+);
+
+app.get(
+  "/api/Seller",
+  async ({ query, set }) => {
+    const { serie } = query;
+
+    if (!serie) {
+      set.status = 400;
+      return {
+        message: "Missing serie",
+      };
+    }
+
+    try {
+      const targetFolder = join(MOUNT_PATH, "All Product", serie, "ประกาศขาย");
+      const files = await readdir(targetFolder);
+
+      // ดึงเฉพาะไฟล์ PDF
+      const pdfFiles = files.filter((file) =>
+        file.toLowerCase().endsWith(".pdf"),
+      );
+
+      if (pdfFiles.length === 0) {
+        set.status = 404;
+        return {
+          message: "No PDF files found",
+        };
+      }
+
+      return pdfFiles.map((file) => ({
+        name: file,
+        url: `/api/Seller/File?serie=${encodeURIComponent(
+          serie,
+        )}&file=${encodeURIComponent(file)}`,
+      }));
+    } catch (error) {
+      console.error(error);
+      set.status = 500;
+      return {
+        message: "Folder not found or access denied",
+      };
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+    }),
+  },
+);
+
+app.get(
+  "/api/Seller/File",
+  async ({ query, set }) => {
+    const { serie, file } = query;
+
+    try {
+      const filePath = join(
+        MOUNT_PATH,
+        "All Product",
+        serie,
+        "ประกาศขาย",
+        decodeURIComponent(file),
+      );
+
+      if (!existsSync(filePath)) {
+        set.status = 404;
+        return "PDF not found";
+      }
+
+      return Bun.file(filePath);
+    } catch (err) {
+      console.error(err);
+      set.status = 500;
+      return "Internal Server Error";
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+      file: t.String(),
     }),
   },
 );
@@ -1242,6 +1474,58 @@ app.get(
   },
 );
 
+app.get(
+  "/api/Picture/ReferenceNonFG",
+  async ({ query, set }) => {
+    const { serie } = query;
+
+    if (!serie) {
+      set.status = 400;
+      return "Missing serie";
+    }
+
+    const targetFolder = join(
+      MOUNT_PATH,
+      "All Product",
+      serie,
+      "Project Reference",
+    );
+
+    try {
+      const files = await readdir(targetFolder);
+
+      // กรองไฟล์รูปทั้งหมด
+      const imageFiles = files.filter((file) =>
+        /\.(jpg|jpeg|png|webp|gif)$/.test(file.toLowerCase()),
+      );
+
+      // อ่านไฟล์ทั้งหมดพร้อมกัน (Parallel) แล้วแปลงเป็น Base64
+      const imagesData = await Promise.all(
+        imageFiles.map(async (file) => {
+          const filePath = join(targetFolder, file);
+          const buffer = await Bun.file(filePath).arrayBuffer();
+          const base64 = Buffer.from(buffer).toString("base64");
+
+          // หานามสกุลไฟล์เพื่อทำ Data URI
+          const ext = file.split(".").pop();
+          return `data:image/${ext};base64,${base64}`;
+        }),
+      );
+
+      return imagesData;
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  },
+  {
+    query: t.Object({
+      serie: t.String(),
+      code: t.Optional(t.String()),
+    }),
+  },
+);
+
 // 1. ตัวแปรเก็บสถานะ Progress (ประกาศไว้นอก Route)
 let currentProgress = 0;
 
@@ -1282,98 +1566,112 @@ app.post("/API/Save_To_SQL", async ({ body, set }) => {
   }
 });
 
-app.post("/upload-excel", async ({ body }: { body: any }) => {
+app.post("/upload-excel", async ({ body, set }: { body: any; set: any }) => {
+  currentProgress = 0;
   try {
     const { data } = body;
-    let pool = await sql.connect(dbconnecting);
     const total = data.length;
 
-    await pool.request().query("DELETE Product");
+    // แก้ 1: กัน division by zero (ไฟล์ว่าง → NaN%)
+    if (total === 0) {
+      currentProgress = 100;
+      return { ok: true };
+    }
 
-    currentProgress = 0;
+    const pool = await sql.connect(dbconnecting);
 
-    for (let i = 0; i < total; i++) {
-      const row = data[i];
+    // แก้ 2: ใช้ transaction ถ้า insert พังกลางทาง ข้อมูลเดิมจะไม่หาย
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
 
-      await pool
-        .request()
-        .input("Product_FG", sql.VarChar, safeString(row.Product_FG))
-        .input("Product_Serie", sql.VarChar, safeString(row.Product_Serie))
-        .input("Product_name", sql.VarChar, safeString(row.Product_name))
-        .input("Product_Code", sql.VarChar, safeString(row.Product_Code))
-        .input(
-          "Product_price",
-          sql.Int,
-          row.Product_price ? Number(row.Product_price) : null,
-        )
-        .input("Product_Path_img", sql.VarChar, row.Product_Path_img)
-        .input("Description", sql.VarChar, safeString(row.Description) || null)
-        .input("Product_FG", sql.VarChar, safeString(row.Product_FG))
-        .input(
-          "Product_Header",
-          sql.VarChar,
-          safeString(row.STS_Product_HEAD)?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Main",
-          sql.VarChar,
-          safeString(row["STS_Product_MAIN TYPE"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Sub",
-          sql.VarChar,
-          safeString(row["STS_Product_SUB TYPE 1"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Sub2",
-          sql.VarChar,
-          safeString(row["STS_Product_SUB TYPE 2"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Sub3",
-          sql.VarChar,
-          safeString(row["STS_Product_SUB TYPE 3"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Sub4",
-          sql.VarChar,
-          safeString(row["STS_Product_SUB TYPE 4"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Sub5",
-          sql.VarChar,
-          safeString(row["STS_Product_SUB TYPE 5"])?.toLocaleUpperCase(),
-        )
-        .input(
-          "Product_Type_Main_TH",
-          sql.VarChar,
-          safeString(row["Product_MAIN TYPE_TH"]),
-        )
-        .input(
-          "Product_Type_Sub_TH",
-          sql.VarChar,
-          safeString(row["Product_SUB TYPE 1_TH"]),
-        )
-        .input(
-          "Product_Type_Sub2_TH",
-          sql.VarChar,
-          safeString(row["Product_SUB TYPE 2_TH"]),
-        )
-        .input(
-          "Product_Type_Sub3_TH",
-          sql.VarChar,
-          safeString(row["Product_SUB TYPE 3_TH"]),
-        )
-        .input(
-          "Product_Type_Sub4_TH",
-          sql.VarChar,
-          safeString(row["Product_SUB TYPE 4_TH"]),
-        )
-        .input(
-          "Product_Type_Sub5_TH",
-          sql.VarChar,
-          safeString(row["Product_SUB TYPE 5_TH"]),
-        ).query(`
+    try {
+      await new sql.Request(tx).query("DELETE Product");
+
+      for (let i = 0; i < total; i++) {
+        const row = data[i];
+
+        await new sql.Request(tx) // แก้ 2: เปลี่ยนจาก pool.request()
+          .input("Product_FG", sql.VarChar, safeString(row.Product_FG))
+          .input("Product_Serie", sql.VarChar, safeString(row.Product_Serie))
+          .input("Product_name", sql.VarChar, safeString(row.Product_name))
+          .input("Product_Code", sql.VarChar, safeString(row.Product_Code))
+          .input(
+            "Product_price",
+            sql.Int,
+            row.Product_price ? Number(row.Product_price) : null,
+          )
+          .input("Product_Path_img", sql.VarChar, row.Product_Path_img)
+          .input(
+            "Description",
+            sql.VarChar,
+            safeString(row.Description) || null,
+          )
+          // แก้ 3: ลบ .input("Product_FG") ที่ซ้ำออก
+          .input(
+            "Product_Header",
+            sql.VarChar,
+            safeString(row.STS_Product_HEAD)?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Main",
+            sql.VarChar,
+            safeString(row["STS_Product_MAIN TYPE"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Sub",
+            sql.VarChar,
+            safeString(row["STS_Product_SUB TYPE 1"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Sub2",
+            sql.VarChar,
+            safeString(row["STS_Product_SUB TYPE 2"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Sub3",
+            sql.VarChar,
+            safeString(row["STS_Product_SUB TYPE 3"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Sub4",
+            sql.VarChar,
+            safeString(row["STS_Product_SUB TYPE 4"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Sub5",
+            sql.VarChar,
+            safeString(row["STS_Product_SUB TYPE 5"])?.toLocaleUpperCase(),
+          )
+          .input(
+            "Product_Type_Main_TH",
+            sql.VarChar,
+            safeString(row["Product_MAIN TYPE_TH"]),
+          )
+          .input(
+            "Product_Type_Sub_TH",
+            sql.VarChar,
+            safeString(row["Product_SUB TYPE 1_TH"]),
+          )
+          .input(
+            "Product_Type_Sub2_TH",
+            sql.VarChar,
+            safeString(row["Product_SUB TYPE 2_TH"]),
+          )
+          .input(
+            "Product_Type_Sub3_TH",
+            sql.VarChar,
+            safeString(row["Product_SUB TYPE 3_TH"]),
+          )
+          .input(
+            "Product_Type_Sub4_TH",
+            sql.VarChar,
+            safeString(row["Product_SUB TYPE 4_TH"]),
+          )
+          .input(
+            "Product_Type_Sub5_TH",
+            sql.VarChar,
+            safeString(row["Product_SUB TYPE 5_TH"]),
+          ).query(`
               INSERT INTO Product
               (Product_FG, Product_Serie, Product_name, Product_Code, Product_price, Product_Path_img, Description, Product_Header, Product_Type_Main, Product_Type_Sub, Product_Type_Sub2, Product_Type_Sub3, Product_Type_Sub4, Product_Type_Sub5,
          Product_Type_Main_TH, Product_Type_Sub_TH, Product_Type_Sub2_TH, Product_Type_Sub3_TH, Product_Type_Sub4_TH, Product_Type_Sub5_TH)
@@ -1382,11 +1680,24 @@ app.post("/upload-excel", async ({ body }: { body: any }) => {
          @Product_Type_Main_TH, @Product_Type_Sub_TH, @Product_Type_Sub2_TH, @Product_Type_Sub3_TH, @Product_Type_Sub4_TH, @Product_Type_Sub5_TH)
           `);
 
-      currentProgress = Math.round(((i + 1) / total) * 100);
+        // แก้ 4: กันไว้ที่ 99 จนกว่า commit เสร็จ
+        currentProgress = Math.min(99, Math.round(((i + 1) / total) * 100));
+      }
+
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
     }
+
+    currentProgress = 100; // ถึง 100 ก็ต่อเมื่อข้อมูลลงฐานจริงแล้ว
+    return { ok: true };
   } catch (err) {
+    // แก้ 5: ตอบ 500 จริง แทนที่จะ return err เฉยๆ (ซึ่งตอบ 200)
     console.error(err);
-    return err;
+    currentProgress = 0;
+    set.status = 500;
+    return { ok: false, error: String(err) };
   }
 });
 
@@ -1516,6 +1827,7 @@ app.post(`/api/Register`, async ({ body }: { body: any }) => {
     const Password = body.passwordRegis;
     const Name = body.NameAndSubNameRegis;
     const Department = body.department;
+    const Department_Sub = body.departmentSub;
 
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(body.passwordRegis, saltRounds);
@@ -1544,16 +1856,17 @@ app.post(`/api/Register`, async ({ body }: { body: any }) => {
         .request()
         .input("Name", sql.VarChar, Name)
         .input("Department", sql.VarChar, Department)
+        .input("Department_Sub", sql.VarChar, Department_Sub)
         .input("Username", sql.VarChar, Username)
         .input("Password", sql.VarChar, hashedPassword)
         .input("Email", sql.VarChar, Email)
         .input("Employee", sql.VarChar, Employee)
         .input("Status", sql.VarChar, "Member")
-        .input("Status_Action", sql.VarChar, "UnActive")
+        .input("Status_Action", sql.VarChar, "Active")
         .input("Date_Created", sql.DateTime, DateToday)
         .input("Date_Update", sql.DateTime, DateToday)
         .query(
-          `INSERT INTO Member (Name, Department, Username, Password, Employee, Email, Status, Status_Action, Date_Created, Date_Update) VALUES (@Name, @Department, @Username, @Password, @Employee, @Email, @Status, @Status_Action, @Date_Created, @Date_Update)`,
+          `INSERT INTO Member (Name, Department, Department_Sub, Username, Password, Employee, Email, Status, Status_Action, Date_Created, Date_Update) VALUES (@Name, @Department, @Department_Sub, @Username, @Password, @Employee, @Email, @Status, @Status_Action, @Date_Created, @Date_Update)`,
         );
       return { success: true };
     }
@@ -1562,67 +1875,113 @@ app.post(`/api/Register`, async ({ body }: { body: any }) => {
   }
 });
 
+const IMAGE_PROBLEM_DIR = resolve(process.cwd(), "public", "Image_Problem");
+const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+
 app.get(`/api/Get_Problem`, async () => {
   const res = await pool.request().query(`SELECT * FROM dbProblem`);
   return res.recordset;
 });
 
-app.post(`/api/report_problem`, async ({ request }: { request: Request }) => {
-  try {
-    // 1. ดึงข้อมูลจาก FormData เนื่องจากส่งมาแบบ multipart/form-data
-    const formData = await request.formData();
-    const problemDescription =
-      (formData.get("problemDescription") as string) || "";
-    const sessionID = (formData.get("SessionID") as string) || "";
-    const file = formData.get("file") as File | null;
-
-    let imagePathToDb = null;
-
-    // 2. ถ้ามีการแนบไฟล์มาด้วย ให้ทำการบันทึกไฟล์ลงโฟลเดอร์ Public/Image_Problem
-    if (file && file.size > 0) {
-      // กำหนดตำแหน่งโฟลเดอร์เป้าหมาย (ปรับ path ตามโครงสร้างโปรเจกต์ของคุณ)
-      const uploadDir = join(process.cwd(), "public", "Image_Problem");
-
-      // สร้างโฟลเดอร์อัตโนมัติถ้ายังไม่มี
-      await mkdir(uploadDir, { recursive: true });
-
-      // ตั้งชื่อไฟล์ใหม่ป้องกันชื่อซ้ำ (ใช้ Timestamp + สุ่ม)
-      const fileExt = file.name.split(".").pop() || "png";
-      const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-      const fullPath = join(uploadDir, uniqueFileName);
-
-      // แปลงไฟล์เป็น Buffer แล้วเขียนลง Disk
-      const buffer = await file.arrayBuffer();
-      await writeFile(fullPath, Buffer.from(buffer));
-
-      // Path ที่จะบันทึกลง Database
-      imagePathToDb = `/Image_Problem/${uniqueFileName}`;
+app.post(
+  `/api/report_problem`,
+  async ({ request, set }: { request: Request; set: any }) => {
+    try {
+      // 1. ดึงข้อมูลจาก FormData เนื่องจากส่งมาแบบ multipart/form-data
+      const formData = await request.formData();
+      const problemDescription =
+        (formData.get("problemDescription") as string) || "";
+      const sessionID = (formData.get("SessionID") as string) || "";
+      const file = formData.get("file") as File | null;
+ 
+      let imagePathToDb: string | null = null;
+ 
+      // 2. ถ้ามีการแนบไฟล์มาด้วย ให้บันทึกลง public/Image_Problem
+      if (file && file.size > 0) {
+        // ตรวจนามสกุลและขนาด (ห้ามไว้ใจ file.type เพราะ browser ส่งปลอมได้)
+        const fileExt = (file.name.split(".").pop() || "").toLowerCase();
+ 
+        if (!ALLOWED_EXT.has(fileExt)) {
+          set.status = 400;
+          return {
+            Success: false,
+            error: "อนุญาตเฉพาะไฟล์ jpg, jpeg, png, gif, webp",
+          };
+        }
+ 
+        if (file.size > MAX_SIZE) {
+          set.status = 400;
+          return { Success: false, error: "ไฟล์ต้องมีขนาดไม่เกิน 5 MB" };
+        }
+ 
+        // สร้างโฟลเดอร์อัตโนมัติถ้ายังไม่มี
+        await mkdir(IMAGE_PROBLEM_DIR, { recursive: true });
+ 
+        // ตั้งชื่อไฟล์ใหม่ป้องกันชื่อซ้ำ (Timestamp + สุ่ม) นามสกุลผ่านการตรวจแล้ว
+        const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const fullPath = join(IMAGE_PROBLEM_DIR, uniqueFileName);
+ 
+        // แปลงไฟล์เป็น Buffer แล้วเขียนลง Disk
+        const buffer = await file.arrayBuffer();
+        await writeFile(fullPath, Buffer.from(buffer));
+ 
+        // Path ที่จะบันทึกลง Database
+        imagePathToDb = `/Image_Problem/${uniqueFileName}`;
+      }
+ 
+      // 3. จัดการเรื่องวันที่
+      const ToDate = new Date();
+      const Day = String(ToDate.getDate()).padStart(2, "0");
+      const Month = String(ToDate.getMonth() + 1).padStart(2, "0");
+      const Year = ToDate.getFullYear();
+      const DateToday = `${Year}-${Month}-${Day}`;
+ 
+      // 4. บันทึกลง SQL Server
+      await pool
+        .request()
+        .input("Problem", sql.VarChar, problemDescription)
+        .input("Date_Problem", sql.VarChar, DateToday)
+        .input("User_Request", sql.VarChar, sessionID)
+        .input("Path_Image", sql.VarChar, imagePathToDb)
+        .query(
+          `INSERT INTO dbProblem (Problem, Date_Problem, User_Request, Path_Image) VALUES (@Problem, @Date_Problem, @User_Request, @Path_Image)`,
+        );
+ 
+      return { Success: true };
+    } catch (error) {
+      console.error("Error saving problem report:", error);
+      set.status = 500; // ให้ frontend เช็ก res.ok ได้ถูกต้อง
+      return { Success: false, error: String(error) };
     }
-
-    // 3. จัดการเรื่องวันที่
-    const ToDate = new Date();
-    const Day = String(ToDate.getDate()).padStart(2, "0");
-    const Month = String(ToDate.getMonth() + 1).padStart(2, "0");
-    const Year = ToDate.getFullYear();
-    const DateToday = `${Year}-${Month}-${Day}`;
-
-    // 4. บันทึกลง SQL Server (เพิ่ม field สำหรับเก็บ Path รูปภาพ เช่น [ImagePath])
-    // *หมายเหตุ: อย่าลืมตรวจสอบชื่อ Column ในตาราง dbProblem ของคุณว่าตรงกันไหม (เช่น ImagePath หรือ Path_File)*
-    await pool
-      .request()
-      .input("Problem", sql.VarChar, problemDescription)
-      .input("Date_Problem", sql.VarChar, DateToday)
-      .input("User_Request", sql.VarChar, sessionID)
-      .input("Path_Image", sql.VarChar, imagePathToDb)
-      .query(
-        `INSERT INTO dbProblem (Problem, Date_Problem, User_Request, Path_Image) VALUES (@Problem, @Date_Problem, @User_Request, @Path_Image)`,
-      );
-
-    return { Success: true };
-  } catch (error) {
-    console.error("Error saving problem report:", error);
-    return { Success: false, error: String(error) };
+  },
+);
+ 
+// ---------- ส่งรูปออกไปให้หน้าเว็บแสดง (ตัวที่ขาดอยู่ ทำให้รูปไม่ขึ้น) ----------
+app.get("/Image_Problem/:name", async ({ params, set }) => {
+  const filePath = resolve(IMAGE_PROBLEM_DIR, params.name);
+ 
+  // กัน ../ หลุดออกนอกโฟลเดอร์
+  if (!filePath.startsWith(IMAGE_PROBLEM_DIR + sep)) {
+    set.status = 400;
+    return "Invalid path";
   }
+ 
+  // ส่งเฉพาะไฟล์รูปเท่านั้น
+  const ext = (filePath.split(".").pop() || "").toLowerCase();
+  if (!ALLOWED_EXT.has(ext)) {
+    set.status = 400;
+    return "Invalid file type";
+  }
+ 
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) {
+    set.status = 404;
+    return "Image not found";
+  }
+ 
+  set.headers["X-Content-Type-Options"] = "nosniff";
+  return file;
 });
 
 app.post(`/api/Check_Login`, async ({ body }: { body: any }) => {
@@ -1733,7 +2092,20 @@ app.get(`/API/Get_UserMember`, async ({ query }: { query: any }) => {
   }
 });
 
-app.post(`/API/Add_UserMember`, async ({ body }: { body: any }) => {
+app.post(`/API/Add_UserMember`, async ({ body, set }: { body: any; set: any }) => {
+  // กันข้อมูลไม่ครบ (ของเดิม bcrypt.hash อยู่นอก try ถ้า Password ว่างจะ error ทั้ง route)
+  if (
+    !body?.Username ||
+    !body?.Password ||
+    !body?.Employee ||
+    !body?.Name ||
+    !body?.Department
+    || !body?.Department_Sub
+  ) {
+    set.status = 400;
+    return { success: false, message: "Missing required fields" };
+  }
+
   const ToDate = new Date();
   const Day = ToDate.getDate();
   const Month = ToDate.getMonth() + 1;
@@ -1741,12 +2113,29 @@ app.post(`/API/Add_UserMember`, async ({ body }: { body: any }) => {
 
   const DateToday = `${Year}-${Month}-${Day}`;
 
-  const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash(body.Password, saltRounds);
-
   try {
+    // เช็กซ้ำเหมือนตอน Register
+    const CheckUser = await pool
+      .request()
+      .input("Username", sql.VarChar, body.Username)
+      .input("Employee", sql.VarChar, body.Employee)
+      .query(
+        `SELECT 1 FROM Member WHERE Username = @Username OR Employee = @Employee`,
+      );
+
+    if (CheckUser.recordset.length > 0) {
+      set.status = 409;
+      return { success: false, message: "Username or Employee already exists" };
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(body.Password, saltRounds);
+
     await pool
       .request()
+      .input("Name", sql.VarChar, body.Name)
+      .input("Department", sql.VarChar, body.Department)
+      .input("Department_Sub", sql.VarChar, body.Department_Sub)
       .input("Username", sql.VarChar, body.Username)
       .input("Password", sql.VarChar, hashedPassword)
       .input("Email", sql.VarChar, body.Email)
@@ -1756,28 +2145,51 @@ app.post(`/API/Add_UserMember`, async ({ body }: { body: any }) => {
       .input("Date_Created", sql.DateTime, DateToday)
       .input("Date_Update", sql.DateTime, DateToday)
       .query(
-        `INSERT INTO Member (Username, Password, Employee, Email, Status, Status_Action, Date_Created, Date_Update) VALUES (@Username, @Password, @Employee, @Email, @Status, @Status_Action, @Date_Created, @Date_Update)`,
+        `INSERT INTO Member (Name, Department, Department_Sub, Username, Password, Employee, Email, Status, Status_Action, Date_Created, Date_Update)
+         VALUES (@Name, @Department, @Department_Sub, @Username, @Password, @Employee, @Email, @Status, @Status_Action, @Date_Created, @Date_Update)`,
       );
+
     return { success: true, message: "User added successfully" };
   } catch (error) {
     console.error(error);
+    set.status = 500;
     return { success: false, message: "Failed to add user" };
   }
 });
 
-app.post(`/API/Update_UserMember`, async ({ body }: { body: any }) => {
+app.post(`/API/Update_UserMember`, async ({ body, set }: { body: any; set: any }) => {
   try {
     const res = await pool
       .request()
       .input("Username", sql.VarChar, body.Username)
+      .input("Name", sql.VarChar, body.Name ?? null)
+      .input("Department", sql.VarChar, body.Department ?? null)
+      .input("Department_Sub", sql.VarChar, body.Department_Sub ?? null)
       .input("Email", sql.VarChar, body.Email)
       .input("Status", sql.VarChar, body.Status)
-      .input("Action", sql.VarChar, body.Status_Action)
-      .execute(`UpdateUserMember`);
+      .input("Status_Action", sql.VarChar, body.Status_Action)
+      .query(
+        `UPDATE Member
+         SET Name = COALESCE(@Name, Name),
+             Department = COALESCE(@Department, Department),
+             Department_Sub = COALESCE(@Department_Sub, Department_Sub),
+             Email = @Email,
+             Status = @Status,
+             Status_Action = @Status_Action,
+             Date_Update = GETDATE()
+         WHERE Username = @Username`,
+      );
 
-    return res;
+    if (res.rowsAffected[0] === 0) {
+      set.status = 404;
+      return { success: false, message: "User not found" };
+    }
+
+    return { success: true };
   } catch (error) {
     console.error(error);
+    set.status = 500;
+    return { success: false, message: "Failed to update user" };
   }
 });
 
@@ -1797,11 +2209,131 @@ app.post(`/API/Delete_UserMember`, async ({ body }: { body: any }) => {
   }
 });
 
+app.get("/Data_Log_Login", async () => {
+  const pool = await sql.connect(dbconnecting);
+  try {
+    const result = await pool.query("SELECT * FROM Log_Login");
+    return result.recordset;
+  } catch (error) {
+    console.error("Database query failed:", error);
+    // return { error: "Failed to fetch products" };
+  }
+});
+
 app.get(`/API/Department`, async ({ body }: { body: any }) => {
   const res = await pool.request().query(`SELECT * FROM dbDepartment`);
 
   return res.recordset;
 });
+
+app.get(`/API/Department_Sub`, async ({ query, set }: { query: any; set: any }) => {
+  const department = typeof query?.Department === "string" ? query.Department.trim() : "";
+  if (!department) return [];
+
+  try {
+    const schema = await pool.request()
+      .input("TableName", sql.VarChar, "dbDepartment_Sub")
+      .query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @TableName`);
+    const columns = schema.recordset.map((row: any) => String(row.COLUMN_NAME));
+    const normalized = new Map(columns.map((column: string) => [column.toLowerCase(), column]));
+    const childColumn = ["department_sub", "departmentsub", "subdepartment", "sub_department", "sub", "subname", "name"]
+      .map((candidate) => normalized.get(candidate))
+      .find(Boolean)
+      ?? columns.find((column: string) => !["id", "department", "department_main", "departmentname"].includes(column.toLowerCase()))
+      ?? normalized.get("department");
+    const parentColumn = ["department", "department_main", "departmentname"]
+      .map((candidate) => normalized.get(candidate))
+      .find((candidate) => candidate && candidate !== childColumn);
+    if (!childColumn) throw new Error(`No sub-department value column found. Columns: ${columns.join(", ")}`);
+
+    const result = await pool.request().query(`SELECT * FROM dbDepartment_Sub`);
+    const rows = result.recordset as Record<string, unknown>[];
+    return parentColumn
+      ? rows.filter((row) => String(row[parentColumn] ?? "").trim() === department)
+      : rows;
+  } catch (error) {
+    console.error("Failed to fetch sub-departments:", error);
+    set.status = 500;
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to fetch sub-departments",
+    };
+  }
+});
+
+app.post(`/API/Department_Sub`, async ({ body, set }: { body: any; set: any }) => {
+  const department = typeof body?.Department === "string" ? body.Department.trim() : "";
+  const departmentSub = typeof body?.Department_Sub === "string" ? body.Department_Sub.trim() : "";
+  if (!department || !departmentSub) {
+    set.status = 400;
+    return { success: false, message: "Department and Department_Sub are required" };
+  }
+
+  try {
+    const schema = await pool.request()
+      .input("TableName", sql.VarChar, "dbDepartment_Sub")
+      .query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @TableName`);
+    const columns = schema.recordset.map((row: any) => String(row.COLUMN_NAME));
+    const normalized = new Map(columns.map((column: string) => [column.toLowerCase(), column]));
+    const childColumn = ["department_sub", "departmentsub", "subdepartment", "sub_department", "sub", "subname", "name"]
+      .map((candidate) => normalized.get(candidate))
+      .find(Boolean)
+      ?? columns.find((column: string) => !["id", "department", "department_main", "departmentname"].includes(column.toLowerCase()))
+      ?? normalized.get("department");
+    const parentColumn = ["department", "department_main", "departmentname"]
+      .map((candidate) => normalized.get(candidate))
+      .find((candidate) => candidate && candidate !== childColumn);
+    if (!childColumn) throw new Error(`No sub-department value column found. Columns: ${columns.join(", ")}`);
+
+    const quoteIdentifier = (identifier: string) => `[${identifier.replaceAll("]", "]]" )}]`;
+    const child = quoteIdentifier(childColumn);
+    const parent = parentColumn ? quoteIdentifier(parentColumn) : null;
+    const request = pool.request().input("Department_Sub", sql.VarChar, departmentSub);
+    if (parent) request.input("Department", sql.VarChar, department);
+    const insertQuery = parent
+      ? `IF NOT EXISTS (SELECT 1 FROM dbo.dbDepartment_Sub WHERE ${parent} = @Department AND ${child} = @Department_Sub)
+         INSERT INTO dbo.dbDepartment_Sub (${parent}, ${child}) VALUES (@Department, @Department_Sub)`
+      : `IF NOT EXISTS (SELECT 1 FROM dbo.dbDepartment_Sub WHERE ${child} = @Department_Sub)
+         INSERT INTO dbo.dbDepartment_Sub (${child}) VALUES (@Department_Sub)`;
+    await request.query(insertQuery);
+    return { success: true, Department: department, Department_Sub: departmentSub };
+  } catch (error) {
+    console.error("Failed to add sub-department:", error);
+    set.status = 500;
+    return { success: false, message: error instanceof Error ? error.message : "Failed to add sub-department" };
+  }
+});
+
+app.post(
+  `/API/Department`,
+  async ({ body, set }: { body: any; set: any }) => {
+    const department =
+      typeof body?.Department === "string" ? body.Department.trim() : "";
+
+    if (!department) {
+      set.status = 400;
+      return { success: false, message: "Department is required" };
+    }
+
+    try {
+      await pool
+        .request()
+        .input("Department", sql.VarChar, department)
+        .query(
+          `IF NOT EXISTS (
+             SELECT 1 FROM dbDepartment WHERE Department = @Department
+           )
+           INSERT INTO dbDepartment (Department) VALUES (@Department)`,
+        );
+
+      return { success: true, Department: department };
+    } catch (error) {
+      console.error("Failed to add department:", error);
+      set.status = 500;
+      return { success: false, message: "Failed to add department" };
+    }
+  },
+);
 
 app.listen(5005);
 

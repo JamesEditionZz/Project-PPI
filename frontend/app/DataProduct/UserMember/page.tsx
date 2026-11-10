@@ -1,5 +1,152 @@
 import React, { useEffect } from "react";
+import * as XLSX from "xlsx";
 
+/* ------------------------------------------------------------------ */
+/*  UI helpers (หน้าตาล้วน ไม่มี logic ข้อมูล)                          */
+/*  ใช้สไตล์เดียวกับฟอร์ม Register: label ซ้าย / input ขวา              */
+/* ------------------------------------------------------------------ */
+const fieldClass =
+  "w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 outline-none transition-all hover:border-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500";
+
+function FormRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      {children}
+    </>
+  );
+}
+
+function SelectBox({
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative w-full">
+      <select
+        {...props}
+        className={`${fieldClass} cursor-pointer appearance-none pr-10`}
+      >
+        {children}
+      </select>
+      {/* ไอคอนลูกศรด้านขวา */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function SearchableCreatableInput({
+  value,
+  options,
+  onChange,
+  onCreate,
+  onCommit,
+  placeholder,
+  disabled = false,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  onCreate: (value: string) => void | Promise<void>;
+  onCommit?: (value: string) => void | Promise<void>;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const listId = React.useId();
+  const [createError, setCreateError] = React.useState("");
+
+  const createOption = async () => {
+    const option = value.trim();
+    if (!option) return;
+    const alreadyExists = options.some(
+      (existing) => existing.toLocaleLowerCase() === option.toLocaleLowerCase(),
+    );
+
+    setCreateError("");
+    try {
+      if (!alreadyExists) await onCreate(option);
+      await onCommit?.(option);
+    } catch (error) {
+      console.error("Error creating option:", error);
+      setCreateError("เพิ่มรายการไม่สำเร็จ กรุณาลองอีกครั้ง");
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        list={listId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={() => void createOption()}
+        disabled={disabled}
+        placeholder={placeholder}
+        className={fieldClass}
+      />
+      <datalist id={listId}>
+        {options.map((option, index) => (
+          <option key={`${option}-${index}`} value={option} />
+        ))}
+      </datalist>
+      {createError && (
+        <p className="mt-1 text-xs text-red-600" role="alert">
+          {createError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ModalShell({
+  title,
+  children,
+  footer,
+}: {
+  title: string;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <h3 className="mb-5 border-b pb-3 text-lg font-bold text-gray-800">
+          {title}
+        </h3>
+        <div className="grid grid-cols-[110px_1fr] items-center gap-x-4 gap-y-4">
+          {children}
+        </div>
+        <div className="mt-6 flex justify-end gap-3 border-t pt-4">
+          {footer}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 export default function page() {
   const [getMember, setGetMember] = React.useState<any>([]);
 
@@ -7,6 +154,10 @@ export default function page() {
   const [selectedUser, setSelectedUser] = React.useState<any>({});
 
   const [loading, setLoading] = React.useState<boolean>(false);
+
+  // รายชื่อแผนก (ดึงจาก API เดียวกับหน้า Register)
+  const [dataDepartment, setDataDepartment] = React.useState<any>([]);
+  const [dataDepartmentSub, setDataDepartmentSub] = React.useState<any[]>([]);
 
   const datafecth = async () => {
     const res = await fetch("http://localhost:5005/API/Get_UserMember");
@@ -21,8 +172,85 @@ export default function page() {
     datafecth();
   }, []);
 
+  useEffect(() => {
+    const fetchDepartment = async () => {
+      try {
+        const res = await fetch("http://localhost:5005/API/Department");
+        const result = await res.json();
+        setDataDepartment(result);
+      } catch (error) {
+        console.error("Error fetching department:", error);
+      }
+    };
+    fetchDepartment();
+  }, []);
+
+  const departmentOptions: string[] = [...new Set<string>(
+    dataDepartment
+      .map((item: any) => item.Department)
+      .filter((name: unknown): name is string => typeof name === "string"),
+  )];
+
+  const fetchDepartmentSub = async (division: string) => {
+    if (!division) {
+      setDataDepartmentSub([]);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `http://localhost:5005/API/Department_Sub?Department=${encodeURIComponent(division)}`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch sub-departments");
+      setDataDepartmentSub(await response.json());
+    } catch (error) {
+      console.error("Error fetching sub-departments:", error);
+      setDataDepartmentSub([]);
+    }
+  };
+
+  const departmentSubOptions: string[] = [...new Set<string>(
+    dataDepartmentSub
+      .map(
+        (item: any) =>
+          item.Department_Sub ?? item.DepartmentSub ?? item.SubDepartment ?? item.Sub_Department ?? item.Name,
+      )
+      .filter((name: unknown): name is string => typeof name === "string"),
+  )];
+
+  const saveDepartment = async (name: string) => {
+    const department = name.trim();
+    if (!department) return;
+    const response = await fetch("http://localhost:5005/API/Department", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Department: department }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.message || "เพิ่มฝ่ายไม่สำเร็จ");
+    setDataDepartment((previous: any[]) => previous.some((item) => item.Department === department)
+      ? previous
+      : [...previous, { Department: department }]);
+    return department;
+  };
+
+  const saveDepartmentSub = async (department: string, name: string) => {
+    const departmentSub = name.trim();
+    if (!department || !departmentSub) return;
+    await saveDepartment(department);
+    const response = await fetch("http://localhost:5005/API/Department_Sub", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Department: department, Department_Sub: departmentSub }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.message || "เพิ่มแผนกไม่สำเร็จ");
+    setDataDepartmentSub((previous) => [...previous, { Department: department, Department_Sub: departmentSub }]);
+    return departmentSub;
+  };
+
   const handleOpenEdit = (item: any) => {
     setSelectedUser(item);
+    void fetchDepartmentSub(item.Department || "");
     setIsEditOpen(true);
   };
 
@@ -30,11 +258,23 @@ export default function page() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
+    if (name === "Department") {
+      setDataDepartmentSub([]);
+      setSelectedUser((prev: any) => ({
+        ...prev,
+        Department: value,
+        Department_Sub: "",
+      }));
+      void fetchDepartmentSub(value);
+      return;
+    }
     setSelectedUser((prev: any) => ({ ...prev, [name]: value }));
   };
 
   const UpdateUser = async (user: any) => {
     try {
+      await saveDepartment(user.Department || "");
+      await saveDepartmentSub(user.Department || "", user.Department_Sub || "");
       const response = await fetch(
         "http://localhost:5005/API/Update_UserMember",
         {
@@ -45,8 +285,6 @@ export default function page() {
           body: JSON.stringify(user),
         },
       );
-
-      console.log(response);
 
       if (!response.ok) {
         throw new Error("Network response was not ok");
@@ -63,47 +301,78 @@ export default function page() {
 
   const [isAddOpen, setIsAddOpen] = React.useState<boolean>(false);
 
-  const [newUser, setNewUser] = React.useState<any>({
+  const emptyUser = {
+    Department: "",
+    Department_Sub: "",
+    Employee: "",
+    Name: "",
     Username: "",
     Email: "",
     Password: "",
     Status: "Member",
     Status_Action: "Active",
-  });
+  };
+
+  const [newUser, setNewUser] = React.useState<any>(emptyUser);
 
   const handleAddChange = (e: { target: { name: any; value: any } }) => {
     const { name, value } = e.target;
+    if (name === "Department") {
+      setDataDepartmentSub([]);
+      setNewUser((prev: any) => ({
+        ...prev,
+        Department: value,
+        Department_Sub: "",
+      }));
+      void fetchDepartmentSub(value);
+      return;
+    }
     setNewUser((prev: any) => ({ ...prev, [name]: value }));
   };
 
   const AddUser = async (userData: any) => {
     try {
-      const response = await fetch("http://localhost:5005/API/Add_UserMember", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      await saveDepartment(userData.Department || "");
+      await saveDepartmentSub(userData.Department || "", userData.Department_Sub || "");
+      const response = await fetch(
+        "http://localhost:5005/API/Add_UserMember",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(userData),
         },
-        body: JSON.stringify(userData),
-      });
+      );
 
       if (!response.ok) {
         throw new Error("Failed to add user");
       }
 
       setIsAddOpen(false);
-      setNewUser({
-        Username: "",
-        Email: "",
-        Password: "",
-        Status: "Member",
-        Status_Action: "Active",
-      });
+      setNewUser(emptyUser);
     } catch (error) {
       console.error("Error adding user:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     } finally {
       datafecth();
     }
+  };
+
+  // ตรวจข้อมูลก่อนบันทึก (เหมือนตอน Register: Email ไม่บังคับ)
+  const handleAddSubmit = () => {
+    if (
+      !newUser.Department ||
+      !newUser.Department_Sub ||
+      !newUser.Employee ||
+      !newUser.Name ||
+      !newUser.Username ||
+      !newUser.Password
+    ) {
+      alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+      return;
+    }
+    AddUser(newUser);
   };
 
   const handleOpenDelete = async (item: any) => {
@@ -129,7 +398,6 @@ export default function page() {
           throw new Error("Failed to delete user");
         }
         const result = await response.json();
-        console.log("User deleted successfully:", result);
         datafecth();
       } catch (error) {
         console.error("Error deleting user:", error);
@@ -138,231 +406,271 @@ export default function page() {
     }
   };
 
+  const Log_Login = async () => {
+    try {
+      const res = await fetch("http://localhost:5005/Data_Log_Login");
+      const data = await res.json();
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Log_Login");
+
+      XLSX.writeFile(workbook, `Log_Login_${Date.now()}.xlsx`);
+    } catch (error) {
+      console.error("Error fetching or exporting data:", error);
+    }
+  };
+
   return (
     <>
       <div>
+        {/* ---------------- Modal: Add User ---------------- */}
         {isAddOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">
-                เพิ่มข้อมูล User ใหม่
-              </h3>
-
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setIsAddOpen(false);
+          <ModalShell
+            title="เพิ่มข้อมูล User ใหม่"
+            footer={
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddOpen(false);
+                  }}
+                  className="cursor-pointer rounded-xl bg-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSubmit}
+                  className="cursor-pointer rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  บันทึก
+                </button>
+              </>
+            }
+          >
+            <FormRow label="ฝ่าย">
+              <div className="grid gap-2">
+              <SearchableCreatableInput
+                value={newUser.Department || ""}
+                options={departmentOptions}
+                onChange={(value) => {
+                  setDataDepartmentSub([]);
+                  setNewUser((previous: any) => ({ ...previous, Department: value, Department_Sub: "" }));
+                  if (departmentOptions.some((name) => name.toLocaleLowerCase() === value.toLocaleLowerCase())) void fetchDepartmentSub(value);
                 }}
-                className="space-y-4"
+                onCreate={async (name) => { await saveDepartment(name); }}
+                onCommit={fetchDepartmentSub}
+                placeholder="ค้นหาหรือพิมพ์ชื่อฝ่าย"
+              />
+              </div>
+            </FormRow>
+
+            <FormRow label="แผนก">
+              <SearchableCreatableInput
+                value={newUser.Department_Sub || ""}
+                options={departmentSubOptions}
+                onChange={(value) => setNewUser((previous: any) => ({ ...previous, Department_Sub: value }))}
+                onCreate={async (name) => { await saveDepartmentSub(newUser.Department, name); }}
+                placeholder={newUser.Department ? "ค้นหาหรือพิมพ์ชื่อแผนก" : "เลือกฝ่ายก่อน"}
+                disabled={!newUser.Department}
+              />
+            </FormRow>
+
+            <FormRow label="Employee ID :">
+              <input
+                type="text"
+                name="Employee"
+                value={newUser.Employee || ""}
+                onChange={handleAddChange}
+                placeholder="รหัสพนักงาน"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Name :">
+              <input
+                type="text"
+                name="Name"
+                value={newUser.Name || ""}
+                onChange={handleAddChange}
+                placeholder="ชื่อ - สกุล"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Username :">
+              <input
+                type="text"
+                name="Username"
+                value={newUser.Username || ""}
+                onChange={handleAddChange}
+                placeholder="รหัสผู้ใช้งาน"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Password :">
+              <input
+                type="password"
+                name="Password"
+                value={newUser.Password || ""}
+                onChange={handleAddChange}
+                placeholder="พาสเวิร์ด"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Email :">
+              <input
+                type="email"
+                name="Email"
+                value={newUser.Email || ""}
+                onChange={handleAddChange}
+                placeholder="อีเมล์"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Status :">
+              <SelectBox
+                name="Status"
+                value={newUser.Status || ""}
+                onChange={handleAddChange}
               >
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Employee
-                  </label>
-                  <input
-                    type="text"
-                    name="Employee"
-                    value={newUser.Employee || ""}
-                    onChange={handleAddChange}
-                    placeholder="ระบุรหัสพนักงาน"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    name="Username"
-                    value={newUser.Username || ""}
-                    onChange={handleAddChange}
-                    placeholder="กรอก Username"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none bg-white"
-                  />
-                </div>
+                <option value="">-- เลือก Status --</option>
+                <option value="Member">Member</option>
+                <option value="Admin">Admin</option>
+              </SelectBox>
+            </FormRow>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="Email"
-                    value={newUser.Email || ""}
-                    onChange={handleAddChange}
-                    placeholder="กรอก Email"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* ตัวอย่างเพิ่ม Password สำหรับตอนสมัครหรือเพิ่ม User ใหม่ */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    name="Password"
-                    value={newUser.Password || ""}
-                    onChange={handleAddChange}
-                    placeholder="กรอก Password"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Status Select */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      name="Status"
-                      value={newUser.Status || ""}
-                      onChange={handleAddChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none bg-white"
-                    >
-                      <option value="">-- เลือก Status --</option>
-                      <option value="Member">Member</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                  </div>
-
-                  {/* Action Select */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Action
-                    </label>
-                    <select
-                      name="Status_Action"
-                      value={newUser.Status_Action || "Active"}
-                      onChange={handleAddChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none bg-white"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="UnActive">UnActive</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 mt-6 pt-3 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddOpen(false)}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 cursor-pointer"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 cursor-pointer"
-                    onClick={() => AddUser && AddUser(newUser)} // เรียกฟังก์ชันบันทึกข้อมูลเพิ่ม
-                  >
-                    บันทึก
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+            <FormRow label="Action :">
+              <SelectBox
+                name="Status_Action"
+                value={newUser.Status_Action || "Active"}
+                onChange={handleAddChange}
+              >
+                <option value="Active">Active</option>
+                <option value="UnActive">UnActive</option>
+              </SelectBox>
+            </FormRow>
+          </ModalShell>
         )}
+
+        {/* ---------------- Modal: Edit User ---------------- */}
         {isEditOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">
-                แก้ไขข้อมูล User: {selectedUser.Username}
-              </h3>
+          <ModalShell
+            title={`แก้ไขข้อมูล User: ${selectedUser.Username}`}
+            footer={
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="cursor-pointer rounded-xl bg-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => UpdateUser(selectedUser)} // เรียกฟังก์ชันอัปเดตข้อมูล
+                  className="cursor-pointer rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  บันทึก
+                </button>
+              </>
+            }
+          >
+            <FormRow label="แผนก">
+              <div className="grid gap-3">
+                <SearchableCreatableInput
+                  value={selectedUser.Department || ""}
+                  options={departmentOptions}
+                  onChange={(value) => {
+                    setDataDepartmentSub([]);
+                    setSelectedUser((previous: any) => ({ ...previous, Department: value, Department_Sub: "" }));
+                    if (departmentOptions.some((name) => name.toLocaleLowerCase() === value.toLocaleLowerCase())) void fetchDepartmentSub(value);
+                  }}
+                  onCreate={async (name) => { await saveDepartment(name); }}
+                  onCommit={fetchDepartmentSub}
+                  placeholder="ค้นหาหรือพิมพ์ชื่อฝ่าย"
+                />
+                <SearchableCreatableInput
+                  value={selectedUser.Department_Sub || ""}
+                  options={departmentSubOptions}
+                  onChange={(value) => setSelectedUser((previous: any) => ({ ...previous, Department_Sub: value }))}
+                  onCreate={async (name) => { await saveDepartmentSub(selectedUser.Department, name); }}
+                  placeholder={selectedUser.Department ? "ค้นหาหรือพิมพ์ชื่อแผนก" : "เลือกฝ่ายก่อน"}
+                  disabled={!selectedUser.Department}
+                />
+              </div>
+            </FormRow>
 
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  // โค้ดสำหรับ fetch ส่ง API อัปเดตข้อมูลตรงนี้
-                  setIsEditOpen(false);
-                }}
-                className="space-y-4"
+            <FormRow label="Employee ID :">
+              <input
+                type="text"
+                name="Employee"
+                value={selectedUser.Employee || ""}
+                className={fieldClass}
+                disabled
+              />
+            </FormRow>
+
+            <FormRow label="Name :">
+              <input
+                type="text"
+                name="Name"
+                value={selectedUser.Name || ""}
+                onChange={handleEditChange}
+                placeholder="ชื่อ - สกุล"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Username :">
+              <input
+                type="text"
+                name="Username"
+                value={selectedUser.Username || ""}
+                className={fieldClass}
+                disabled
+              />
+            </FormRow>
+
+            <FormRow label="Email :">
+              <input
+                type="email"
+                name="Email"
+                value={selectedUser.Email || ""}
+                onChange={handleEditChange}
+                placeholder="อีเมล์"
+                className={fieldClass}
+              />
+            </FormRow>
+
+            <FormRow label="Status :">
+              <SelectBox
+                name="Status"
+                value={selectedUser.Status || ""}
+                onChange={handleEditChange}
               >
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    name="Username"
-                    value={selectedUser.Username || ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-                    disabled
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="Email"
-                    value={selectedUser.Email || ""}
-                    onChange={handleEditChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Status Select */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      name="Status"
-                      value={selectedUser.Status || ""}
-                      onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-                    >
-                      <option value="">-- เลือก Status --</option>
-                      <option value="Member">Member</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                  </div>
+                <option value="">-- เลือก Status --</option>
+                <option value="Member">Member</option>
+                <option value="Admin">Admin</option>
+              </SelectBox>
+            </FormRow>
 
-                  {/* Action Select */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Action
-                    </label>
-                    <select
-                      name="Status_Action"
-                      value={selectedUser.Status_Action || ""}
-                      onChange={handleEditChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="UnActive">UnActive</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 mt-6 pt-3 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditOpen(false)}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 cursor-pointer"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 cursor-pointer"
-                    onClick={() => UpdateUser(selectedUser)} // เรียกฟังก์ชันอัปเดตข้อมูล
-                  >
-                    บันทึก
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+            <FormRow label="Action :">
+              <SelectBox
+                name="Status_Action"
+                value={selectedUser.Status_Action || ""}
+                onChange={handleEditChange}
+              >
+                <option value="Active">Active</option>
+                <option value="UnActive">UnActive</option>
+              </SelectBox>
+            </FormRow>
+          </ModalShell>
         )}
 
         <div className="flex justify-between">
@@ -372,7 +680,16 @@ export default function page() {
           <div className="p-5">
             <button
               type="button"
-              onClick={() => setIsAddOpen(true)}
+              onClick={() => Log_Login()}
+              className="px-5 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 cursor-pointer mx-3"
+            >
+              Log Login
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddOpen(true);
+              }}
               className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 cursor-pointer"
             >
               Add User
@@ -418,7 +735,7 @@ export default function page() {
                   >
                     <tr className="hover:bg-gray-50 transition-colors">
                       <td className="py-2.5 px-4 font-medium text-gray-900">
-                        {item.Department}
+                        {item.Department} / {item.Department_Sub}
                       </td>
                       <td className="py-2.5 px-4 font-medium text-gray-900">
                         {item.Employee}

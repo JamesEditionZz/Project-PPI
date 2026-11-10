@@ -11,8 +11,10 @@ export default function page() {
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
+    localStorage.removeItem("username");
+    localStorage.removeItem("sessionId");
     router.replace("/");
-    alert("You have been logged out due to 10 minutes of inactivity.");
+    alert("คุณถูกออกจากระบบเนื่องจากไม่มีการใช้งานเกิน 10 นาที");
   };
 
   const resetTimer = () => {
@@ -23,7 +25,13 @@ export default function page() {
   };
 
   useEffect(() => {
-    const events = ["mousemove", "keydown", "mousedown", "touchstart", "scroll"];
+    const events = [
+      "mousemove",
+      "keydown",
+      "mousedown",
+      "touchstart",
+      "scroll",
+    ];
 
     events.forEach((event) => {
       window.addEventListener(event, resetTimer);

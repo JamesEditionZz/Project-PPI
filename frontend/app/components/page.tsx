@@ -12,10 +12,6 @@ import Product from "./Product/page";
 import FinalProduct from "./FinalProduct/page";
 import IdleLogoutTimer from "../CheckAction/page";
 
-useEffect(() => {
-  IdleLogoutTimer();
-});
-
 export default function Page() {
   const [selectedFilters, setSelectedFilters] = React.useState<
     Record<number, string[]>
@@ -118,20 +114,24 @@ export default function Page() {
   }, []);
 
   const SelectProduct = (productType: string) => {
-    const parts = productType;
-    if (parts && parts.includes(":")) {
-      const splitParts = productType.split(":");
-      const type = splitParts[0].trim();
-      const data = splitParts[1].trim();
-      if (type === "Sub2") {
+    const [type, ...valueParts] = productType.split(":");
+    if (valueParts.length > 0) {
+      const data = valueParts.join(":").trim();
+      if (type.trim() === "Final_Product") {
+        setToggle((prev) => {
+          const next = [...prev.slice(0, 12)];
+          while (next.length < 12) next.push("");
+          return [...next, " > ", data];
+        });
+      } else if (type.trim() === "Sub2") {
         setToggle((prev) => [...prev, "", "", "", "", "", "", " > ", data]);
-      } else if (type === "Model") {
+      } else if (type.trim() === "Model") {
         setToggle((prev) => [...prev, "", "", "", "", " > ", data]);
-      } else if (type === "Special") {
+      } else if (type.trim() === "Special") {
         setToggle((prev) => [...prev, "", "", " > ", data]);
       }
     } else {
-      setToggle((prev) => [...prev, " > ", parts]);
+      setToggle((prev) => [...prev, " > ", productType]);
     }
   };
 
@@ -228,7 +228,9 @@ export default function Page() {
 
   const ShowReference = async (ValueReference: any) => {
     try {
-      const serie = ValueReference?.Product_Serie;
+      const serie = ValueReference?.Product_Serie ?? ValueReference;
+      if (!serie) return;
+
       const res = await fetch(
         `http://localhost:5005/api/Picture/ReferenceNonFG?serie=${encodeURIComponent(serie)}`,
       );
@@ -291,9 +293,6 @@ export default function Page() {
     for (let i = level + 1; i < FILTER_KEYS.length; i++) {
       updated[i] = [];
     }
-
-    console.log(updated[0].length);
-
     if (updated[0].length > 0) {
       setSelectedFilters(updated);
       FilterProduct(updated);
@@ -473,6 +472,7 @@ export default function Page() {
 
   return (
     <>
+      {(SessionID?.length ?? 0) > 0 && <IdleLogoutTimer />}
       {(SessionID?.length ?? 0) > 0 && (
         <div className="fixed bottom-4 right-4 z-50">
           <button
@@ -935,9 +935,9 @@ export default function Page() {
                 />
               ) : Toggle.length === 12 ? (
                 <Product ValueToggle={Toggle} onUpdate={SelectProduct} />
-              ) : (
-                Toggle.length === 14 && <FinalProduct ValueToggle={Toggle} />
-              )}
+              ) : Toggle.length >= 14 ? (
+                <FinalProduct ValueToggle={Toggle} />
+              ) : null}
             </>
           ) : (
             <div className="grid grid-cols-5 gap-5 text-lg font-bold p-8 max-[600px]:grid-cols-1 max-[600px]:gap-2 max-[800px]:grid-cols-2 max-[800px]:gap-2 max-[1200px]:grid-cols-3 max-[1200px]:gap-2 max-[1600px]:grid-cols-4 max-[1600px]:gap-2">

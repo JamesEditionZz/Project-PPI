@@ -10,6 +10,7 @@
     "@elysiajs/static": "^1.4.10",
     "activedirectory2": "^2.2.0",
     "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "elysia": "latest",
     "ldapjs": "^3.0.7",
     "mime": "^4.1.0",

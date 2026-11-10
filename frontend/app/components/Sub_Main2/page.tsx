@@ -45,15 +45,20 @@ export default function page({
     ),
   );
 
+  const terminalProducts = view_MD.filter((item, index, self) => {
+    const sub2 = item.Product_Type_Sub2?.toString().trim();
+    return (
+      (!sub2 || sub2.toLowerCase() === "null") &&
+      index === self.findIndex((candidate) => candidate.Product_name === item.Product_name)
+    );
+  });
+
   const ProductTypes = view_MD.filter((item, index, self) => {
     // 1. เงื่อนไขแรก: เลือกเฉพาะรายการที่เป็น "3 Storage"
     // (ตรวจสอบชื่อ Property อีกครั้งว่า Product_Header หรือ Header นะครับ)
     const isStorage = item.Product_Header === "3 STORAGE";
     const isSpace = item.Product_Header === "4 SPACE DIVIDER";
     
-    console.log(item);
-    
-
     // 2. เงื่อนไขที่สอง: เช็คความซ้ำ (Unique)
     const isUnique =
       index ===
@@ -64,18 +69,18 @@ export default function page({
       );
 
     // ต้องผ่านทั้งสองเงื่อนไขถึงจะเอาข้อมูลชุดนี้ไปใช้งาน
-    return isStorage || (isSpace && isUnique);
+    const hasSub2 = Boolean(
+      item.Product_Type_Sub2 && item.Product_Type_Sub2 !== "null",
+    );
+    return hasSub2 && (isStorage || (isSpace && isUnique));
   });
 
-  console.log(ProductTypes);
-  
-
   const SelectProduct = (ToggleProduct: string) => {
-    const Check_Path = view_MD.filter(
+    const Check_Path = view_MD.find(
       (item) => item.Product_Type_Sub2 === ToggleProduct,
     );
 
-    if (Check_Path[0].Product_Type_Sub2.length > 0) {
+    if (Check_Path?.Product_Type_Sub2) {
       onUpdate(ToggleProduct);
     } else {
       onUpdate(`Final_Product:${ToggleProduct.split("|")[0]}`);
@@ -84,15 +89,18 @@ export default function page({
 
   const CheckProductReference = (Value: string) => {
     const Check_FG = view_MD.filter((item) => item.Product_name === Value);
+    const product = Check_FG[0];
+
+    if (!product) return;
 
     if (
-      Check_FG[0]?.Product_FG[0].includes("FG") ||
-      Check_FG[0]?.Product_FG[0].includes("FM") ||
-      Check_FG[0]?.Product_FG[0].includes("FP")
+      product.Product_FG?.[0]?.includes("FG") ||
+      product.Product_FG?.[0]?.includes("FM") ||
+      product.Product_FG?.[0]?.includes("FP")
     ) {
       onUpdate(`Sub2:${Value.split("|")[0]}`);
     } else {
-      onReference(Check_FG[0]?.Product_Serie);
+      onReference(product);
     }
   };
 
@@ -150,6 +158,27 @@ export default function page({
             </div>
             <div className="text-center text-base/6 p-1 bg-neutral-700 text-white font-normal font-san mt-auto">
               <div>{item.Product_name}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {terminalProducts.map((item, index) => (
+        <div key={`terminal-${item.Product_name}-${index}`}>
+          <div
+            className="cursor-pointer box-size-Images"
+            onClick={() => onUpdate(`Final_Product:${item.Product_name}`)}
+          >
+            <div className="flex items-end h-full">
+              <Image
+                loader={myLoader}
+                src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                width={1000}
+                height={1000}
+                alt={item.Product_name}
+              />
+            </div>
+            <div className="text-center text-base/6 p-1 bg-neutral-700 text-white font-normal font-san mt-auto">
+              {item.Product_name}
             </div>
           </div>
         </div>

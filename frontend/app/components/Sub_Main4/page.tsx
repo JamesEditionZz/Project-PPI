@@ -63,15 +63,18 @@ export default function page({
 
   const CheckProductReference = (Value: string) => {
     const Check_FG = view_MD.filter((item) => item.Product_name === Value);
+    const product = Check_FG[0];
+
+    if (!product) return;
 
     if (
-      Check_FG[0]?.Product_FG[0].includes("FG") ||
-      Check_FG[0]?.Product_FG[0].includes("FM") ||
-      Check_FG[0]?.Product_FG[0].includes("FP")
+      product.Product_FG?.[0]?.includes("FG") ||
+      product.Product_FG?.[0]?.includes("FM") ||
+      product.Product_FG?.[0]?.includes("FP")
     ) {
       onUpdate(`Special:${Value.split("|")[0]}`);
     } else {
-      onReference(Check_FG[0]?.Product_Serie);
+      onReference(product);
     }
   };
 

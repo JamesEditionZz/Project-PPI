@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-// @ts-expect-error CSS side-effect imports are handled by Next.js.
 import "./product.css";
 
 export default function page({ ParamSelect }: { ParamSelect: string }) {
@@ -77,7 +76,7 @@ export default function page({ ParamSelect }: { ParamSelect: string }) {
     ? groupedBySeries[selectedSeries] || []
     : [];
   const seriesFileSummary = selectedSeriesProducts.reduce(
-    (summary, item: any) => ({
+    (summary: { Catalog: any; Meterial: any; Drawing: any; Spec: any; Seller: any; Reference: number; }, item: any) => ({
       Catalog: summary.Catalog || Boolean(item.Catalog),
       Meterial: summary.Meterial || Boolean(item.Meterial),
       Drawing: summary.Drawing || Boolean(item.Drawing),

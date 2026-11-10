@@ -31,12 +31,27 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
     new Set(
       view_MD.map(
         (item: any) => `${item.Product_Type_Sub}|${item.Product_Type_Sub_TH}`,
-      ),
+      ).filter((item) => {
+        const value = item.split("|")[0].trim();
+        return value !== "" && value.toLowerCase() !== "null";
+      }),
     ),
   );
 
+  const terminalProducts = view_MD.filter((item, index, self) => {
+    const sub = item.Product_Type_Sub?.toString().trim();
+    return (
+      (!sub || sub.toLowerCase() === "null") &&
+      index === self.findIndex((candidate) => candidate.Product_name === item.Product_name)
+    );
+  });
+
   const SelectProduct = (ToggleProduct: string) => {
     onUpdate(ToggleProduct.split("|")[0]);
+  };
+
+  const SelectFinalProduct = (productName: string) => {
+    onUpdate(`Final_Product:${productName}`);
   };
 
   return (
@@ -68,6 +83,27 @@ export default function page({ ValueToggle, onUpdate }: MainProps) {
           </div>
         );
       })}
+      {terminalProducts.map((item, index) => (
+        <div key={`terminal-${item.Product_name}-${index}`}>
+          <div
+            className="cursor-pointer box-size-Images"
+            onClick={() => SelectFinalProduct(item.Product_name)}
+          >
+            <div className="flex items-end h-full">
+              <Image
+                loader={myLoader}
+                src={`http://localhost:5005/api/Product?serie=${encodeURIComponent(item.Product_Serie)}&code=${encodeURIComponent(item.Product_name)}`}
+                width={1000}
+                height={1000}
+                alt={item.Product_name}
+              />
+            </div>
+            <div className="text-center text-base/6 p-1 bg-neutral-700 text-white font-normal font-san mt-auto">
+              {item.Product_name}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

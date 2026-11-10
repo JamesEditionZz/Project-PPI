@@ -22,12 +22,100 @@ export default function Page() {
     React.useState<string>("");
   const [dataDepartment, setDataDepartment] = React.useState<any>([]);
   const [department, setDepartment] = React.useState<string>("");
+  const [dataDepartmentSub, setDataDepartmentSub] = React.useState<any[]>([]);
+  const [departmentSub, setDepartmentSub] = React.useState<string>("");
   const [errorText, setErrorText] = React.useState<string>("");
 
   // เปลี่ยนเป็น Array เพื่อเก็บแจ้งเตือนหลายอันพร้อมกัน
   const [alertTextFalse, setAlertTextFalse] = React.useState<any[]>([]);
 
   const myLoader = ({ src }: { src: string }) => src;
+
+  const bgVideoRef = React.useRef<HTMLVideoElement>(null);
+  const mainVideoRef = React.useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const videos = [bgVideoRef.current, mainVideoRef.current].filter(
+      Boolean,
+    ) as HTMLVideoElement[];
+
+    const playAll = () => {
+      videos.forEach((v) => {
+        v.muted = true;
+        v.play().catch((e) => {
+          // AbortError = browser หยุดเองเพื่อประหยัดพลังงาน ไม่ใช่ error จริง
+          if (e.name !== "AbortError") console.error("video play failed:", e);
+        });
+      });
+    };
+
+    playAll();
+
+    // กลับมาที่แท็บแล้วให้เล่นต่อ
+    const onVisible = () => {
+      if (document.visibilityState === "visible") playAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  const addDepartment = async (value: string) => {
+    const name = value.trim();
+    if (!name) return;
+    if (dataDepartment.some((item: any) => String(item.Department).toLocaleLowerCase() === name.toLocaleLowerCase())) return;
+    const response = await fetch("http://localhost:5005/API/Department", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Department: name }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.message || "เพิ่มฝ่ายไม่สำเร็จ");
+    setDataDepartment((previous: any[]) => previous.some((item) => item.Department === name) ? previous : [...previous, { Department: name }]);
+    setDepartment(name);
+  };
+
+  const addDepartmentSub = async (value: string) => {
+    const name = value.trim();
+    if (!department || !name) return;
+    await addDepartment(department);
+    if (dataDepartmentSub.some((item: any) => {
+      const existing = item.Department_Sub ?? item.DepartmentSub ?? item.SubDepartment ?? item.Sub_Department ?? item.Name;
+      return String(existing ?? "").toLocaleLowerCase() === name.toLocaleLowerCase();
+    })) return;
+    const response = await fetch("http://localhost:5005/API/Department_Sub", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Department: department, Department_Sub: name }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.message || "เพิ่มแผนกไม่สำเร็จ");
+    setDataDepartmentSub((previous) => [...previous, result]);
+    setDepartmentSub(name);
+  };
+
+  const fetchDepartmentSub = async (value: string) => {
+    const name = value.trim();
+    if (!name) {
+      setDataDepartmentSub([]);
+      setDepartmentSub("");
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:5005/API/Department_Sub?Department=${encodeURIComponent(name)}`);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result?.message || `Sub-department API returned ${res.status}`);
+      setDataDepartmentSub(Array.isArray(result) ? result : []);
+    } catch (error) {
+      console.error("Error fetching sub-departments:", error);
+      setDataDepartmentSub([]);
+    }
+  };
+
+  const commitDepartment = async (value: string) => {
+    await addDepartment(value);
+    await fetchDepartmentSub(value);
+  };
 
   useEffect(() => {
     const datafecth = async () => {
@@ -39,8 +127,6 @@ export default function Page() {
 
     datafecth();
   }, []);
-
-  console.log(dataDepartment);
 
   // 1. กด Enter ที่คีย์บอร์ด
   const handleLoginProcess = async () => {
@@ -103,17 +189,21 @@ export default function Page() {
       !passwordRegis ||
       !employeeRegis ||
       !department ||
+      !departmentSub ||
       !NameAndSubNameRegis
     ) {
       alert("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     } else {
       try {
+        await addDepartment(department);
+        await addDepartmentSub(departmentSub);
         const res = await fetch(`http://localhost:5005/api/Register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             department,
+            departmentSub,
             NameAndSubNameRegis,
             usernameRegis,
             passwordRegis,
@@ -131,6 +221,8 @@ export default function Page() {
             setPasswordRegis("");
             setEmployeeRegis("");
             setEmailRegis("");
+                    setDepartment("");
+                    setDepartmentSub("");
             setAlertTextRegis(false);
             SwicthRegister(false);
           }, 2000);
@@ -138,7 +230,8 @@ export default function Page() {
           triggerAlert();
         }
       } catch (error) {
-        console.log(error);
+        console.error(error);
+        alert(error instanceof Error ? error.message : "บันทึกฝ่ายหรือแผนกไม่สำเร็จ");
       }
     }
   };
@@ -187,25 +280,36 @@ export default function Page() {
         <div className="body-logo border-1 border-right hidden-logo">
           <div className="relative w-full h-screen overflow-hidden flex items-center justify-center bg-black">
             {/* 1. เลเยอร์พื้นหลัง: วิดีโอเดียวกันแต่ขยายใหญ่และใส่เอฟเฟกต์เบลอ */}
+            {/* 1. เลเยอร์พื้นหลัง: วิดีโอเดียวกันแต่ขยายใหญ่และใส่เอฟเฟกต์เบลอ */}
             <video
+              ref={bgVideoRef}
               autoPlay
               muted
               loop
               playsInline
+              preload="auto"
+              onError={(e) =>
+                console.error("bg video error:", e.currentTarget.error)
+              }
               className="absolute top-1/2 left-1/2 min-w-full min-h-full w-auto h-auto -translate-x-1/2 -translate-y-1/2 object-cover filter blur-2xl opacity-100 scale-110 z-0 pointer-events-none"
             >
-              <source src="/Video/PTK_40.mp4" type="video/mp4" />
+              <source src="/Video/Ptk_40.mp4" type="video/mp4" />
             </video>
 
             {/* 2. เลเยอร์หลัก: วิดีโอจริงตรงกลาง (เห็นครบทุกส่วนด้วย object-contain) */}
             <video
+              ref={mainVideoRef}
               autoPlay
               muted
               loop
               playsInline
+              preload="auto"
+              onError={(e) =>
+                console.error("main video error:", e.currentTarget.error)
+              }
               className="absolute top-1/2 left-1/2 max-w-full max-h-full w-auto h-auto -translate-x-1/2 -translate-y-1/2 object-contain z-10 shadow-2xl"
             >
-              <source src="/Video/PTK_40.mp4" type="video/mp4" />
+              <source src="/Video/Ptk_40.mp4" type="video/mp4" />
             </video>
           </div>
         </div>
@@ -219,28 +323,28 @@ export default function Page() {
                     <h2 className="animation-text">Register</h2>
                   </div>
                   <div className="grid grid-cols-2 items-center mb-5">
-                    <div className="align-center">แผนก</div>
-                    <div className="relative w-full max-w-xs">
-                      <select
-                        className="w-full appearance-none bg-white border border-gray-300 hover:border-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-gray-700 py-2.5 px-4 pr-10 rounded-xl shadow-xs text-sm font-medium transition-all cursor-pointer outline-none"
-                        onChange={(e) => setDepartment(e.target.value)}
-                      >
-                        <option value="" hidden>
-                          -- กรุณาเลือกแผนก --
-                        </option>
-                        {dataDepartment.map((item: any, index: any) => (
-                          <option
-                            key={index}
-                            value={item.Department}
-                            className="py-2"
-                          >
-                            {item.Department}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="align-center">ฝ่าย</div>
+                    <div className="relative w-full max-w-xs grid gap-2">
+                      <input
+                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700"
+                        list="register-departments"
+                        value={department}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setDepartment(value);
+                          setDepartmentSub("");
+                          setDataDepartmentSub([]);
+                          if (dataDepartment.some((item: any) => String(item.Department).toLocaleLowerCase() === value.toLocaleLowerCase())) void fetchDepartmentSub(value);
+                        }}
+                        onBlur={(e) => void commitDepartment(e.currentTarget.value).catch((error) => alert(error.message))}
+                        placeholder="ค้นหาหรือพิมพ์ชื่อฝ่าย"
+                      />
+                      <datalist id="register-departments">
+                        {dataDepartment.map((item: any, index: number) => <option key={index} value={item.Department} />)}
+                      </datalist>
 
                       {/* ไอคอนลูกศรด้านขวา (ใช้ pointer-events-none เพื่อให้คลิกทะลุไอคอนได้) */}
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                      <div className="hidden">
                         <svg
                           className="w-4 h-4"
                           fill="none"
@@ -255,6 +359,24 @@ export default function Page() {
                           />
                         </svg>
                       </div>
+                    </div>
+                    <div className="align-center">แผนก</div>
+                    <div className="relative w-full max-w-xs mt-4 mb-3 grid gap-2">
+                      <input
+                        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 disabled:bg-gray-100"
+                        list="register-sub-departments"
+                        value={departmentSub}
+                        onChange={(e) => setDepartmentSub(e.target.value)}
+                        onBlur={(e) => void addDepartmentSub(e.currentTarget.value).catch((error) => alert(error.message))}
+                        placeholder={department ? "ค้นหาหรือพิมพ์ชื่อแผนก" : "เลือกฝ่ายก่อน"}
+                        disabled={!department}
+                      />
+                      <datalist id="register-sub-departments">
+                        {dataDepartmentSub.map((item: any, index: number) => {
+                          const name = item.Department_Sub ?? item.DepartmentSub ?? item.SubDepartment ?? item.Sub_Department ?? item.Name;
+                          return name ? <option key={index} value={name} /> : null;
+                        })}
+                      </datalist>
                     </div>
                     <div className="align-center">Employee ID :</div>
                     <input

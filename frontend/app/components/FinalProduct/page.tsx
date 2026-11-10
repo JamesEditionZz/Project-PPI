@@ -154,9 +154,6 @@ export default function Page({ ValueToggle }: MainProps) {
             `http://localhost:5005/api/Picture/Reference?serie=${encodeURIComponent(product_Serie_Toggle)}&code=${encodeURIComponent(currentShowName)}`,
           );
           const data = await res.json();
-
-          console.log(currentShowName);
-
           setReferenceImages(Array.isArray(data) ? data : []);
         } catch (err) {
           setReferenceImages([]);
@@ -255,11 +252,11 @@ export default function Page({ ValueToggle }: MainProps) {
                         {item?.Product_Code}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-500">
-                        {item?.Product_FG?.[0] || "-"}
+                        {item?.Product_FG || "-"}
                       </td>
                       <td className="px-4 py-3 text-center font-bold">
                         {!isExpired ? (
-                          item?.Product_FG?.[0].slice(-1) === "#" ? (
+                          item?.Product_FG.slice(-1) === "#" ? (
                             <span className="text-red-600">
                               {item?.Product_price}
                             </span>
@@ -529,7 +526,7 @@ export default function Page({ ValueToggle }: MainProps) {
           >
             {catalogFiles.length > 0 ? (
               <div className="flex h-full">
-                <div className="w-20 border-r overflow-y-auto">
+                <div className="w-70 border-r overflow-y-auto max-[1200px]:w-30">
                   {catalogFiles?.map((pdf) => (
                     <div
                       key={pdf.name}
@@ -583,7 +580,7 @@ export default function Page({ ValueToggle }: MainProps) {
             {colorFiles.length > 0 ? (
               <div className="flex h-full">
                 {/* รายชื่อ PDF ด้านซ้าย */}
-                <div className="w-20 border-r overflow-y-auto">
+                <div className="w-70 border-r overflow-y-auto max-[1200px]:w-30">
                   {colorFiles?.map((pdf) => (
                     <div
                       key={pdf.name}
@@ -641,7 +638,7 @@ export default function Page({ ValueToggle }: MainProps) {
             {drawingFiles.length > 0 ? (
               <div className="flex h-full">
                 {/* รายชื่อ PDF */}
-                <div className="border-r overflow-y-auto">
+                <div className="w-70 border-r overflow-y-auto max-[1200px]:w-30">
                   {drawingFiles?.map((pdf) => (
                     <div
                       key={pdf.name}
@@ -749,7 +746,7 @@ export default function Page({ ValueToggle }: MainProps) {
             {specFiles.length > 0 ? (
               <div className="flex h-full">
                 {/* รายชื่อ PDF */}
-                <div className="w-20 border-r overflow-y-auto">
+                <div className="w-70 border-r overflow-y-auto max-[1200px]:w-30">
                   {specFiles.map((pdf) => (
                     <div
                       key={pdf.name}
@@ -762,7 +759,6 @@ export default function Page({ ValueToggle }: MainProps) {
                           : ""
                       }`}
                     >
-                      {console.log(selectedPdf)}
                       {pdf.name}
                     </div>
                   ))}
@@ -798,7 +794,7 @@ export default function Page({ ValueToggle }: MainProps) {
             {sellerFiles.length > 0 ? (
               <div className="flex h-full">
                 {/* รายชื่อ PDF */}
-                <div className="border-r overflow-y-auto">
+                <div className="w-70 border-r overflow-y-auto max-[1200px]:w-30">
                   {sellerFiles.map((pdf) => (
                     <div
                       key={pdf.name}
